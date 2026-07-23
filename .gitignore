@@ -1,0 +1,9 @@
+node_modules/
+.npm-cache/
+.env
+.vercel/
+*.db
+*.db-*
+coverage/
+
+.vercel

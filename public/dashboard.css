@@ -1,0 +1,30 @@
+.dashboard-shell { width: min(100%, 1180px); margin: 0 auto; padding: clamp(1rem, 3vw, 3rem); }
+.desk-header { display: flex; justify-content: space-between; gap: 2rem; align-items: end; padding: clamp(1.5rem, 4vw, 3.5rem) 0 2rem; border-bottom: 1px solid var(--line); }
+.desk-header h1 { margin-bottom: .55rem; font-size: clamp(3rem, 8vw, 6rem); line-height: .85; }
+.desk-header p:not(.eyebrow) { max-width: 42ch; margin-bottom: 0; color: var(--ink-soft); }
+.desk-link { color: var(--leaf-dark); font-weight: 750; }
+.dashboard-status { min-height: 1.2rem; color: var(--ink-soft); }
+.metric-panel { display: flex; justify-content: space-between; align-items: end; gap: 1.5rem; margin: 1.5rem 0; padding: clamp(1.25rem, 4vw, 2.5rem); border-radius: 1rem; background: var(--leaf); color: white; }
+.metric-panel .eyebrow { color: var(--lime); }
+.metric-panel strong { display: block; margin: .3rem 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(3rem, 8vw, 6rem); line-height: .85; letter-spacing: -.06em; }
+.metric-panel p { margin: 0; color: #deeadb; }
+.metric-panel > span { padding: .45rem .7rem; border: 1px solid #86ad9b; border-radius: 99rem; font-size: .85rem; font-weight: 750; white-space: nowrap; }
+.desk-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; }
+.desk-panel { padding: clamp(1.2rem, 3vw, 2rem); border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+.desk-panel:first-child { grid-row: span 2; }
+.panel-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin-bottom: 1rem; }
+.panel-heading h2 { margin-bottom: 0; font-size: clamp(1.6rem, 3vw, 2.5rem); line-height: .95; }
+.panel-heading time { color: var(--ink-soft); font-size: .85rem; }
+.timeline, .followup-list { display: grid; gap: .75rem; padding: 0; margin: 0; list-style: none; }
+.timeline li { display: grid; grid-template-columns: 4rem 1fr; gap: .8rem; padding: .75rem 0; border-top: 1px solid var(--line); }
+.timeline time { color: var(--leaf); font-size: .85rem; font-weight: 800; }
+.timeline strong, .followup-list strong { display: block; margin-bottom: .18rem; }
+.timeline span, .followup-list span { color: var(--ink-soft); font-size: .9rem; }
+.followup-list li { padding: .85rem 0; border-top: 1px solid var(--line); }
+.empty-state { color: var(--ink-soft); font-size: .92rem; line-height: 1.5; }
+@media (max-width: 720px) {
+  .desk-header { display: block; }
+  .desk-link { display: inline-block; margin-top: 1rem; }
+  .desk-grid { grid-template-columns: 1fr; }
+  .desk-panel:first-child { grid-row: auto; }
+}

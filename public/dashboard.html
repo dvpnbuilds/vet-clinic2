@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title>VetFlow dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/dashboard.css">
+  </head>
+  <body>
+    <main class="dashboard-shell">
+      <section class="access-card" id="access-card" aria-labelledby="access-title">
+        <p class="wordmark">VetFlow</p>
+        <h1 id="access-title"></h1>
+        <p id="access-help"></p>
+        <form id="access-form">
+          <label for="access-code" id="access-label"></label>
+          <div class="access-row">
+            <input id="access-code" type="password" autocomplete="off" required>
+            <button id="access-action" type="submit"></button>
+          </div>
+          <p class="form-message" id="access-message" role="alert"></p>
+        </form>
+      </section>
+
+      <section class="dashboard-app is-hidden" id="dashboard-app" aria-labelledby="dashboard-title">
+        <header class="desk-header">
+          <div>
+            <p class="eyebrow" id="clinic-name"></p>
+            <h1 id="dashboard-title"></h1>
+            <p id="dashboard-intro"></p>
+          </div>
+          <a href="/" class="desk-link" id="booking-link"></a>
+        </header>
+        <p id="dashboard-status" class="dashboard-status" role="status"></p>
+        <section class="metric-panel" aria-labelledby="recovered-title">
+          <div>
+            <p class="eyebrow" id="recovered-title"></p>
+            <strong id="recovered-value"></strong>
+            <p id="recovered-help"></p>
+          </div>
+          <span id="recovered-count"></span>
+        </section>
+        <div class="desk-grid">
+          <section class="desk-panel" aria-labelledby="calendar-title">
+            <div class="panel-heading"><h2 id="calendar-title"></h2><time id="dashboard-date"></time></div>
+            <ol id="calendar-list" class="timeline"></ol>
+          </section>
+          <section class="desk-panel" aria-labelledby="pending-title">
+            <div class="panel-heading"><h2 id="pending-title"></h2></div>
+            <ul id="pending-list" class="followup-list"></ul>
+          </section>
+          <section class="desk-panel" aria-labelledby="vaccines-title">
+            <div class="panel-heading"><h2 id="vaccines-title"></h2></div>
+            <ul id="vaccines-list" class="followup-list"></ul>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/dashboard.js"></script>
+  </body>
+</html>

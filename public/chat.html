@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title>VetFlow chat</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/chat.css">
+  </head>
+  <body>
+    <main class="chat-shell">
+      <section class="access-card" id="access-card" aria-labelledby="access-title">
+        <p class="wordmark">VetFlow</p>
+        <h1 id="access-title"></h1>
+        <p id="access-help"></p>
+        <form id="access-form">
+          <label for="access-code" id="access-label"></label>
+          <div class="access-row">
+            <input id="access-code" type="password" autocomplete="off" required>
+            <button id="access-action" type="submit"></button>
+          </div>
+          <p class="form-message" id="access-message" role="alert"></p>
+        </form>
+      </section>
+
+      <section class="chat-app is-hidden" id="chat-app" aria-labelledby="chat-title">
+        <header class="chat-header">
+          <a class="back-link" href="/">← <span id="clinic-name"></span></a>
+          <p class="eyebrow" id="chat-kicker"></p>
+          <h1 id="chat-title"></h1>
+          <p id="chat-intro"></p>
+        </header>
+        <div class="messages" id="messages" aria-live="polite" aria-label="Conversation"></div>
+        <form class="composer" id="chat-form">
+          <label class="sr-only" for="chat-input" id="chat-input-label"></label>
+          <textarea id="chat-input" rows="2" required></textarea>
+          <button id="send-action" type="submit"></button>
+        </form>
+      </section>
+    </main>
+    <script type="module" src="/chat.js"></script>
+  </body>
+</html>

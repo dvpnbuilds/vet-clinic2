@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title>VetFlow</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="access-card" id="access-card" aria-labelledby="access-title">
+        <p class="wordmark">VetFlow</p>
+        <h1 id="access-title"></h1>
+        <p id="access-help"></p>
+        <form id="access-form" novalidate>
+          <label for="access-code" id="access-label"></label>
+          <div class="access-row">
+            <input id="access-code" name="accessCode" type="password" autocomplete="off" required>
+            <button type="submit" id="access-action"></button>
+          </div>
+          <p class="form-message" id="access-message" role="alert"></p>
+        </form>
+      </section>
+
+      <section class="booking-flow is-hidden" id="booking-flow" aria-live="polite">
+        <header class="hero">
+          <div>
+            <p class="eyebrow" id="kicker"></p>
+            <h1 id="clinic-name"></h1>
+            <p class="hero-copy" id="intro"></p>
+          </div>
+          <aside class="clinic-meta">
+            <p id="clinic-address"></p>
+            <a id="clinic-phone"></a>
+          </aside>
+        </header>
+
+        <div class="progress" aria-label="Booking progress">
+          <span class="is-active">1</span><span></span><span>2</span><span></span><span>3</span>
+        </div>
+
+        <section class="booking-section" aria-labelledby="service-heading">
+          <div class="section-heading">
+            <p class="step-number">01</p>
+            <div>
+              <h2 id="service-heading"></h2>
+              <p id="service-help"></p>
+            </div>
+          </div>
+          <div class="service-grid" id="services" role="radiogroup"></div>
+        </section>
+
+        <section class="booking-section is-muted" id="availability-section" aria-labelledby="slot-heading">
+          <div class="section-heading">
+            <p class="step-number">02</p>
+            <div>
+              <h2 id="slot-heading"></h2>
+              <p id="slot-help"></p>
+            </div>
+          </div>
+          <div class="date-row">
+            <label for="booking-date" id="date-label"></label>
+            <input id="booking-date" type="date" required>
+            <span id="timezone-note"></span>
+          </div>
+          <p class="form-message" id="slots-message" role="status"></p>
+          <div class="slot-grid" id="slots" aria-live="polite"></div>
+        </section>
+
+        <section class="booking-section is-hidden" id="details-section" aria-labelledby="details-heading">
+          <div class="section-heading">
+            <p class="step-number">03</p>
+            <div><h2 id="details-heading"></h2></div>
+          </div>
+          <div class="chosen-slot" id="chosen-slot"></div>
+          <form id="booking-form" class="details-form" novalidate>
+            <div class="field">
+              <label for="owner-name" id="owner-name-label"></label>
+              <input id="owner-name" name="ownerName" autocomplete="name" required>
+            </div>
+            <div class="field">
+              <label for="owner-mobile" id="mobile-label"></label>
+              <input id="owner-mobile" name="mobile" type="tel" autocomplete="tel" required>
+            </div>
+            <div class="field">
+              <label for="owner-email" id="email-label"></label>
+              <input id="owner-email" name="email" type="email" autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="pet-name" id="pet-name-label"></label>
+              <input id="pet-name" name="petName" required>
+            </div>
+            <div class="field">
+              <label for="pet-species" id="species-label"></label>
+              <select id="pet-species" name="species" required></select>
+            </div>
+            <div class="field">
+              <label for="pet-breed" id="breed-label"></label>
+              <input id="pet-breed" name="breed">
+            </div>
+            <p class="form-message" id="booking-message" role="alert"></p>
+            <button class="primary-action" id="book-action" type="submit"></button>
+          </form>
+        </section>
+
+        <section class="thank-you is-hidden" id="thank-you" aria-labelledby="success-heading">
+          <p class="success-mark" aria-hidden="true">✓</p>
+          <p class="eyebrow" id="success-kicker"></p>
+          <h2 id="success-heading"></h2>
+          <p id="success-summary"></p>
+          <p id="success-body"></p>
+          <button id="another-action" type="button"></button>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/booking.js"></script>
+  </body>
+</html>
