@@ -2,6 +2,14 @@
 
 Current phase: 6 (P1/P2 remediation built; independent re-audit required)
 
+Additional P2 remediation: 2026-07-24 — Vaccine reminder due times are now resolved as 9:00 AM in the clinic’s IANA timezone, not UTC. Demo access accepts only the request header, never a URL query parameter. Reminder claims and context reads now carry the active clinic boundary as defense in depth. Local verification: npm test (38 passing), JavaScript syntax checks, and git diff --check.
+
+Post-audit reliability remediation: 2026-07-24 — Block-off insertion is now an atomic conditional write that cannot win alongside an overlapping pending/confirmed booking; a concurrent regression test proves exactly one operation succeeds. Provider calls now have a deadline, delivery-attempt history is retained, failures emit an operational reconciliation alert, and staff-only reconciliation/retry endpoints are available. Local verification: npm test (36 passing), JavaScript syntax checks, and git diff --check. Booking idempotency remains outstanding; it was not enabled after the local libSQL driver rejected the proposed transactional reservation write at commit time.
+
+Post-audit P2 remediation: 2026-07-24 — IANA local-time conversion now skips DST spring gaps and selects the first occurrence during autumn overlaps, preventing duplicate persisted slots. Vaccine enqueueing and due-reminder delivery are scoped to the active clinic. Local verification: npm test (35 passing), JavaScript syntax checks, and git diff --check.
+
+Post-audit P1 remediation: 2026-07-24 — Past dates and elapsed same-day slots are rejected before slot generation, and every booking transaction rechecks that the chosen slot is still in the future. Appointment reminder scheduling now skips 24-hour and 2-hour reminders whose windows have already passed. Owner action links render a read-only confirmation page on GET; confirmation and rescheduling state changes require an explicit POST with the bearer token. Local verification: npm test (33 passing), JavaScript syntax checks, and git diff --check.
+
 Final audit: 2026-07-24 — NO-GO. The independent source audit found P1 issues in staff authorization, dashboard stored XSS, and reminder delivery recovery, plus P2 validation, rate-limit, and profile-isolation issues. The P1/P2 remediation is now implemented locally and 30 automated tests pass, but a fresh independent audit is required before release.
 
 P1 remediation: 2026-07-24 — Staff-only APIs now require a distinct STAFF_PASSCODE; dashboard records render with text nodes; and reminder delivery attempts are persisted before provider calls so ambiguous outcomes are held for reconciliation rather than resent automatically.

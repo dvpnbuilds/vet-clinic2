@@ -26,7 +26,6 @@ function createPasscodeAccessMiddleware({
   headerName,
   unavailableMessage,
   unauthorizedMessage,
-  allowQueryPasscode = false,
   now = () => Date.now(),
   consumeAttempt = consumeDemoRateLimit
 }) {
@@ -57,8 +56,7 @@ function createPasscodeAccessMiddleware({
       return response.status(429).json({ error: 'Too many requests. Please try again shortly.' });
     }
 
-    const suppliedPasscode = requestHeader(request, headerName)
-      || (allowQueryPasscode ? request.query?.demo_passcode : undefined);
+    const suppliedPasscode = requestHeader(request, headerName);
     if (suppliedPasscode !== passcode) {
       return response.status(401).json({ error: unauthorizedMessage });
     }
@@ -73,7 +71,6 @@ export function createDemoAccessMiddleware(options = {}) {
     headerName: 'x-demo-passcode',
     unavailableMessage: 'Demo access is not configured.',
     unauthorizedMessage: 'Demo passcode required.',
-    allowQueryPasscode: true,
     ...options
   });
 }

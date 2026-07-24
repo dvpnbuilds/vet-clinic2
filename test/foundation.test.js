@@ -4,11 +4,11 @@ import express from 'express';
 import { createDemoAccessMiddleware } from '../routes/demo-access.js';
 import { health } from '../routes/health.js';
 
-async function request(app, passcode) {
+async function request(app, passcode, query = '') {
   const server = await new Promise((resolve) => {
     const running = app.listen(0, '127.0.0.1', () => resolve(running));
   });
-  const url = 'http://127.0.0.1:' + server.address().port + '/api/health';
+  const url = 'http://127.0.0.1:' + server.address().port + '/api/health' + query;
   const response = await fetch(url, { headers: passcode ? { 'x-demo-passcode': passcode } : {} });
   await new Promise((resolve) => server.close(resolve));
   return response;
@@ -40,6 +40,14 @@ test('health endpoint returns the active clinic profile after authentication', a
   assert.equal(body.status, 'ok');
   assert.equal(body.clinic.name, 'Pawsitive Vet Care');
   assert.equal(body.clinic.language, 'taglish');
+});
+
+test('demo passcodes in URL query strings are rejected', async () => {
+  process.env.DEMO_PASSCODE = 'test-passcode';
+  const response = await request(createApp({
+    consumeAttempt: async () => ({ count: 1, resetAt: Date.now() + 60000 })
+  }), null, '?demo_passcode=test-passcode');
+  assert.equal(response.status, 401);
 });
 
 test('rate limit rejects requests over the configured per-IP maximum', async () => {

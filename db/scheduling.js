@@ -5,6 +5,7 @@ import { getActiveClinicProfile } from './profiles/index.js';
 const SLICE_MINUTES = 10;
 const ACTIVE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'completed'];
 const PET_SPECIES = new Set(['dog', 'cat', 'other']);
+const timeZoneOffsetsByDate = new Map();
 
 export class SchedulingError extends Error {
   constructor(message, status = 400) {
@@ -40,7 +41,7 @@ function toClock(minutes) {
   return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
 }
 
-function timeZoneOffsetMilliseconds(timeZone, instant) {
+function localDateTimeParts(timeZone, instant) {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
@@ -51,9 +52,13 @@ function timeZoneOffsetMilliseconds(timeZone, instant) {
     second: '2-digit',
     hourCycle: 'h23'
   });
-  const values = Object.fromEntries(formatter.formatToParts(instant)
+  return Object.fromEntries(formatter.formatToParts(instant)
     .filter((part) => part.type !== 'literal')
     .map((part) => [part.type, part.value]));
+}
+
+function timeZoneOffsetMilliseconds(timeZone, instant) {
+  const values = localDateTimeParts(timeZone, instant);
   const localAsUtc = Date.UTC(
     Number(values.year),
     Number(values.month) - 1,
@@ -65,14 +70,50 @@ function timeZoneOffsetMilliseconds(timeZone, instant) {
   return localAsUtc - instant.getTime();
 }
 
+function timeZoneOffsetsForDate(date, timeZone) {
+  const key = timeZone + ':' + date;
+  const cached = timeZoneOffsetsByDate.get(key);
+  if (cached) return cached;
+
+  const dayStart = new Date(date + 'T00:00:00.000Z').getTime();
+  const offsets = new Set();
+  // Sampling both sides of the local date captures the standard and daylight
+  // offsets on transition days without relying on the host machine timezone.
+  for (let timestamp = dayStart - 36 * 60 * 60 * 1000; timestamp <= dayStart + 60 * 60 * 60 * 1000; timestamp += 60 * 60 * 1000) {
+    offsets.add(timeZoneOffsetMilliseconds(timeZone, new Date(timestamp)));
+  }
+  const result = [...offsets];
+  if (timeZoneOffsetsByDate.size >= 366) timeZoneOffsetsByDate.clear();
+  timeZoneOffsetsByDate.set(key, result);
+  return result;
+}
+
 export function localDateTimeToIso(date, clock, timeZone) {
   parseDate(date);
   parseClock(clock);
-  const tentative = new Date(date + 'T' + clock + ':00.000Z');
-  const firstOffset = timeZoneOffsetMilliseconds(timeZone, tentative);
-  const adjusted = new Date(tentative.getTime() - firstOffset);
-  const correctedOffset = timeZoneOffsetMilliseconds(timeZone, adjusted);
-  return new Date(tentative.getTime() - correctedOffset).toISOString();
+  const target = { date, clock };
+  const localAsUtc = new Date(date + 'T' + clock + ':00.000Z').getTime();
+  const candidates = timeZoneOffsetsForDate(date, timeZone)
+    .map((offset) => new Date(localAsUtc - offset))
+    .filter((candidate) => {
+      const local = localDateTimeParts(timeZone, candidate);
+      return local.year + '-' + local.month + '-' + local.day === target.date
+        && local.hour + ':' + local.minute === target.clock
+        && local.second === '00';
+    })
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  // DST spring gaps have no matching instant. During autumn overlaps we use
+  // the first occurrence, so a wall-clock slot has one stable persisted ID.
+  return candidates[0]?.toISOString() || null;
+}
+
+function firstInstantOfLocalDate(date, timeZone) {
+  for (let minute = 0; minute < 24 * 60; minute += 1) {
+    const instant = localDateTimeToIso(date, toClock(minute), timeZone);
+    if (instant) return instant;
+  }
+  throw new SchedulingError('No valid time exists on this local date.');
 }
 
 function addLocalDays(date, days) {
@@ -92,6 +133,15 @@ function listSlices(startsAt, endsAt) {
   }
   return slices;
 }
+
+function asTimestamp(value, label) {
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    throw new SchedulingError(label + ' is invalid.');
+  }
+  return timestamp;
+}
+
 
 function requiredString(value, label, maxLength) {
   if (typeof value !== 'string') {
@@ -200,7 +250,7 @@ async function remainingCapacity(vetId, startsAt, endsAt, capacity) {
   return Math.min(...listSlices(startsAt, endsAt).map((slice) => capacity - (counts.get(slice) || 0)));
 }
 
-export async function listSlots(input) {
+export async function listSlots(input, { now = new Date() } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new SchedulingError('Slot search details are required.');
   }
@@ -209,8 +259,12 @@ export async function listSlots(input) {
   const { profile, service } = await loadClinicAndService(serviceId);
   const localDate = parseDate(date);
   const weekday = localDate.getUTCDay();
-  const dayStart = localDateTimeToIso(date, '00:00', profile.timezone);
-  const dayEnd = localDateTimeToIso(addLocalDays(date, 1), '00:00', profile.timezone);
+  const dayStart = firstInstantOfLocalDate(date, profile.timezone);
+  const dayEnd = firstInstantOfLocalDate(addLocalDays(date, 1), profile.timezone);
+  const nowTimestamp = asTimestamp(now, 'Current time');
+  if (new Date(dayEnd).getTime() <= nowTimestamp) {
+    throw new SchedulingError('Please choose a future date.');
+  }
   const vets = asRows(await query(
     'SELECT id, name FROM vets WHERE clinic_id = ? AND active = 1 ORDER BY name',
     [profile.id]
@@ -229,7 +283,11 @@ export async function listSlots(input) {
       const lastStartMinute = parseClock(period.ends_at) - Number(service.duration_minutes);
       for (let minute = firstMinute; minute <= lastStartMinute; minute += SLICE_MINUTES) {
         const startsAt = localDateTimeToIso(date, toClock(minute), profile.timezone);
+        if (!startsAt) continue;
         const endsAt = new Date(new Date(startsAt).getTime() + Number(service.duration_minutes) * 60 * 1000).toISOString();
+        if (new Date(startsAt).getTime() <= nowTimestamp) {
+          continue;
+        }
         if (overlapsBlockOff(blockOffs, vet.id, startsAt, endsAt)) {
           continue;
         }
@@ -268,9 +326,23 @@ async function transactionRows(transaction, sql, args = []) {
   return asRows(await transaction.execute({ sql, args }));
 }
 
-export async function bookSlot(input) {
+function appointmentResult(appointment) {
+  return {
+    id: appointment.id,
+    slotId: appointment.slot_id,
+    serviceId: appointment.service_id,
+    vetId: appointment.vet_id,
+    startsAt: appointment.starts_at,
+    endsAt: appointment.ends_at,
+    status: appointment.status
+  };
+}
+
+export async function bookSlot(input, { now = new Date() } = {}) {
   input = validateBookingInput(input);
+  const nowTimestamp = asTimestamp(now, 'Current time');
   const profile = getActiveClinicProfile();
+  const appointmentId = randomUUID();
   let transaction;
   try {
     transaction = await getDb().transaction('write');
@@ -284,6 +356,9 @@ export async function bookSlot(input) {
     }
     if (slot.status !== 'available') {
       throw new SchedulingError('That time is no longer available.', 409);
+    }
+    if (new Date(slot.starts_at).getTime() <= nowTimestamp) {
+      throw new SchedulingError('That time has already passed.', 409);
     }
 
     const block = (await transactionRows(
@@ -315,7 +390,6 @@ export async function bookSlot(input) {
 
     const ownerId = randomUUID();
     const petId = randomUUID();
-    const appointmentId = randomUUID();
     await transaction.execute({
       sql: 'INSERT INTO owners (id, clinic_id, name, mobile, email, preferred_channel) VALUES (?, ?, ?, ?, ?, ?)',
       args: [ownerId, profile.id, input.owner.name.trim(), input.owner.mobile || null, input.owner.email || null, input.owner.email && !input.owner.mobile ? 'email' : 'sms']
@@ -334,20 +408,16 @@ export async function bookSlot(input) {
         args: [randomUUID(), appointmentId, slot.vet_id, startsAt, capacityIndex]
       });
     }
-    await transaction.execute({
-      sql: 'UPDATE slots SET status = CASE WHEN capacity <= 1 THEN ? ELSE status END WHERE id = ?',
-      args: ['unavailable', slot.id]
-    });
+    if (Number(slot.capacity) <= 1) {
+      await transaction.execute({
+        sql: 'UPDATE slots SET status = ? WHERE id = ?',
+        args: ['unavailable', slot.id]
+      });
+    }
     await transaction.commit();
-    return {
-      id: appointmentId,
-      slotId: slot.id,
-      serviceId: slot.service_id,
-      vetId: slot.vet_id,
-      startsAt: slot.starts_at,
-      endsAt: slot.ends_at,
-      status: 'pending'
-    };
+    transaction.close();
+    transaction = null;
+    return appointmentResult({ id: appointmentId, slot_id: slot.id, service_id: slot.service_id, vet_id: slot.vet_id, starts_at: slot.starts_at, ends_at: slot.ends_at, status: 'pending' });
   } catch (error) {
     if (transaction && !transaction.closed) {
       await transaction.rollback();
@@ -355,7 +425,7 @@ export async function bookSlot(input) {
     if (error instanceof SchedulingError) {
       throw error;
     }
-    if (String(error.message).includes('UNIQUE constraint failed') || String(error.message).includes('database is locked')) {
+    if (String(error.message).includes('UNIQUE constraint failed') || String(error.message).includes('database is locked') || String(error.message).includes('SQLITE_BUSY')) {
       throw new SchedulingError('That time is no longer available.', 409);
     }
     throw error;
@@ -378,17 +448,30 @@ export async function createBlockOff(input) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     throw new SchedulingError('Block-off start and end times are invalid.');
   }
+  const id = randomUUID();
   if (vetId) {
     const vet = asRows(await query('SELECT id FROM vets WHERE id = ? AND clinic_id = ?', [vetId, profile.id]))[0];
-    if (!vet) {
-      throw new SchedulingError('Vet not found.', 404);
+    if (!vet) throw new SchedulingError('Vet not found.', 404);
+  }
+  // One conditional write makes conflict detection and insertion indivisible:
+  // either this block wins first, or an overlapping active appointment does.
+  let inserted;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      inserted = await query(
+        'INSERT INTO block_offs (id, clinic_id, vet_id, starts_at, ends_at, reason) SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM appointments WHERE clinic_id = ? AND status IN (?, ?) AND (? IS NULL OR vet_id = ?) AND starts_at < ? AND ends_at > ?)',
+        [id, profile.id, vetId, start.toISOString(), end.toISOString(), reason, profile.id, 'pending', 'confirmed', vetId, vetId, end.toISOString(), start.toISOString()]
+      );
+      break;
+    } catch (error) {
+      if (!String(error.message).includes('database is locked') && !String(error.message).includes('SQLITE_BUSY')) throw error;
+      if (attempt === 2) throw new SchedulingError('Scheduling changed. Please try again.', 409);
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
-  const id = randomUUID();
-  await query(
-    'INSERT INTO block_offs (id, clinic_id, vet_id, starts_at, ends_at, reason) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, profile.id, vetId, start.toISOString(), end.toISOString(), reason]
-  );
+  if (inserted.rowsAffected === 0) {
+    throw new SchedulingError('This block-off overlaps an existing appointment.', 409);
+  }
   return { id, vetId, startsAt: start.toISOString(), endsAt: end.toISOString(), reason };
 }
 
@@ -403,8 +486,8 @@ export async function listCalendar(input) {
     throw new SchedulingError('view must be day or week.');
   }
   parseDate(date);
-  const startsAt = localDateTimeToIso(date, '00:00', profile.timezone);
-  const endsAt = localDateTimeToIso(addLocalDays(date, view === 'week' ? 7 : 1), '00:00', profile.timezone);
+  const startsAt = firstInstantOfLocalDate(date, profile.timezone);
+  const endsAt = firstInstantOfLocalDate(addLocalDays(date, view === 'week' ? 7 : 1), profile.timezone);
   const appointments = asRows(await query(
     'SELECT a.id, a.starts_at, a.ends_at, a.status, s.name AS service_name, v.name AS vet_name, p.name AS pet_name, o.name AS owner_name FROM appointments a JOIN services s ON s.id = a.service_id JOIN vets v ON v.id = a.vet_id JOIN pets p ON p.id = a.pet_id JOIN owners o ON o.id = a.owner_id WHERE a.clinic_id = ? AND a.starts_at >= ? AND a.starts_at < ? AND a.status IN (?, ?, ?) ORDER BY a.starts_at',
     [profile.id, startsAt, endsAt, ...ACTIVE_APPOINTMENT_STATUSES]

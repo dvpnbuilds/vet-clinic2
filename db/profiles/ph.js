@@ -77,6 +77,11 @@ export default {
       message: 'Hi {owner}! Mukhang na-miss ang visit ni {pet}. Mag-reschedule sa {clinic}: {rescheduleUrl}'
     },
     ownerActions: {
+      confirmTitle: 'I-confirm ang appointment',
+      rescheduleTitle: 'I-reschedule ang appointment',
+      confirmPrompt: 'Pindutin ang continue para i-confirm ang appointment mo.',
+      reschedulePrompt: 'Pindutin ang continue para markahan ang appointment para sa rescheduling.',
+      continueAction: 'Continue',
       confirmed: 'Confirmed na ang appointment mo.',
       alreadyConfirmed: 'Confirmed na ang appointment mo.',
       rescheduled: 'Nareschedule na ang appointment mo. Makipag-ugnayan sa clinic para pumili ng bagong oras.',

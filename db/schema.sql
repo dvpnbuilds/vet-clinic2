@@ -158,6 +158,17 @@ CREATE TABLE IF NOT EXISTS reminder_delivery_attempts (
   last_error TEXT
 );
 
+CREATE TABLE IF NOT EXISTS reminder_delivery_attempt_history (
+  id TEXT PRIMARY KEY,
+  reminder_id TEXT NOT NULL REFERENCES reminders(id) ON DELETE CASCADE,
+  claim_token TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  outcome TEXT NOT NULL CHECK (outcome IN ('delivering', 'sent', 'uncertain')),
+  provider_message_id TEXT,
+  last_error TEXT
+);
+
 CREATE TABLE IF NOT EXISTS demo_rate_limits (
   ip TEXT PRIMARY KEY,
   window_started_at INTEGER NOT NULL,
@@ -171,4 +182,5 @@ CREATE INDEX IF NOT EXISTS idx_slot_reservations_vet_time ON slot_reservations (
 CREATE INDEX IF NOT EXISTS idx_appointments_clinic_time ON appointments (clinic_id, starts_at);
 CREATE INDEX IF NOT EXISTS idx_reminders_due_unsent ON reminders (due_at, sent_at, status);
 CREATE INDEX IF NOT EXISTS idx_reminder_delivery_attempts_outcome ON reminder_delivery_attempts (outcome, started_at);
+CREATE INDEX IF NOT EXISTS idx_reminder_delivery_attempt_history_reminder ON reminder_delivery_attempt_history (reminder_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_vaccinations_due ON vaccinations (due_on);

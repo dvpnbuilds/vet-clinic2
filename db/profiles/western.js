@@ -77,6 +77,11 @@ export default {
       message: 'Hi {owner}, it looks like {pet} missed a visit. Reschedule with {clinic}: {rescheduleUrl}'
     },
     ownerActions: {
+      confirmTitle: 'Confirm your appointment',
+      rescheduleTitle: 'Reschedule your appointment',
+      confirmPrompt: 'Select continue to confirm your appointment.',
+      reschedulePrompt: 'Select continue to mark your appointment for rescheduling.',
+      continueAction: 'Continue',
       confirmed: 'Your appointment is confirmed.',
       alreadyConfirmed: 'Your appointment is already confirmed.',
       rescheduled: 'Your appointment has been marked for rescheduling. Please contact the clinic to choose a new time.',

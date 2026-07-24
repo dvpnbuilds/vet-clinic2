@@ -1,7 +1,7 @@
 import express from 'express';
 import { createDemoAccessMiddleware, createStaffAccessMiddleware } from './routes/demo-access.js';
 import { health } from './routes/health.js';
-import { ownerAction, runReminderCron, unconfirmedAppointments } from './routes/reminders.js';
+import { ownerAction, reminderReconciliation, retryReminderRoute, runReminderCron, unconfirmedAppointments } from './routes/reminders.js';
 import { receptionistChat } from './routes/chat.js';
 import { dashboard } from './routes/dashboard.js';
 import { publicProfile } from './routes/profile.js';
@@ -11,6 +11,7 @@ const app = express();
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(express.static('public'));
 
 app.get('/api/profile', publicProfile);
@@ -21,7 +22,10 @@ app.post('/api/block-offs', createStaffAccessMiddleware(), blockOff);
 app.get('/api/calendar', createStaffAccessMiddleware(), calendar);
 app.post('/api/cron/reminders', runReminderCron);
 app.get('/api/owner/:action', ownerAction);
+app.post('/api/owner/:action', ownerAction);
 app.get('/api/appointments/unconfirmed', createStaffAccessMiddleware(), unconfirmedAppointments);
+app.get('/api/reminders/reconciliation', createStaffAccessMiddleware(), reminderReconciliation);
+app.post('/api/reminders/:id/retry', createStaffAccessMiddleware(), retryReminderRoute);
 app.post('/api/chat', createDemoAccessMiddleware(), receptionistChat);
 app.get('/api/dashboard', createStaffAccessMiddleware(), dashboard);
 
