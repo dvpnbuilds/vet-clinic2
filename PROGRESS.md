@@ -1,8 +1,12 @@
 # Progress
 
-Current phase: 6 (built; audit deferred)
+Current phase: 6 (P1/P2 remediation built; independent re-audit required)
 
-Final audit: 2026-07-23 — CONDITIONAL PASS. All source criteria are covered locally; 22 automated tests pass, and the booking access screen was manually rendered at 390px. Before production launch, configure required environment variables and verify the deployed Vercel URL with real Turso credentials. The audit workflow also created/linked a Vercel project; review that remote state before deploying.
+Final audit: 2026-07-24 — NO-GO. The independent source audit found P1 issues in staff authorization, dashboard stored XSS, and reminder delivery recovery, plus P2 validation, rate-limit, and profile-isolation issues. The P1/P2 remediation is now implemented locally and 30 automated tests pass, but a fresh independent audit is required before release.
+
+P1 remediation: 2026-07-24 — Staff-only APIs now require a distinct STAFF_PASSCODE; dashboard records render with text nodes; and reminder delivery attempts are persisted before provider calls so ambiguous outcomes are held for reconciliation rather than resent automatically.
+
+P2 remediation: 2026-07-24 — Booking, slot, calendar, and block-off inputs are validated server-side with safe 400 responses; rate limits prefer Vercel's verified client-IP header and never select a forwarded-chain entry; and seed fixtures are profile-owned and excluded from public profile responses. Local verification: npm test (30 passing), JavaScript syntax checks, git diff --check, and npm audit --omit=dev --audit-level=high.
 
 Phase 1 delivery: built on 2026-07-23; audit deferred by user instruction until all planned phases are complete. Local verification: npm test (3 passing) and npm run seed against a temporary libSQL database.
 
@@ -41,6 +45,9 @@ Notes:
 Audit:
 
 ## Decision log
+- 2026-07-24: P2 remediation adds strict boundary validation, Vercel-safe IP selection, and profile-owned seed fixtures; public profile payloads exclude all server-only seed data.
+- 2026-07-24: P1 remediation separates public DEMO_PASSCODE access from staff-only STAFF_PASSCODE access; it does not create pet-owner accounts or in-memory sessions.
+- 2026-07-24: Reminder delivery is conservatively at-most-once after a provider call begins. Ambiguous provider/database outcomes are retained for reconciliation instead of retried automatically, preventing duplicate SMS/email charges.
 - 2026-07-23: Final audit conditional pass after moving pre-access copy into clinic profiles and replacing Express-only request header calls with Vercel-safe helpers.
 - 2026-07-23: Recovered revenue is an attribution metric: the sum of confirmed appointments with at least one sent appointment reminder, not a claim of payment collection.
 - 2026-07-23: Phase 6 was built without an audit at user direction; audit is deferred until all planned phases are complete.

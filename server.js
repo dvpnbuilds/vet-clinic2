@@ -1,5 +1,5 @@
 import express from 'express';
-import { createDemoAccessMiddleware } from './routes/demo-access.js';
+import { createDemoAccessMiddleware, createStaffAccessMiddleware } from './routes/demo-access.js';
 import { health } from './routes/health.js';
 import { ownerAction, runReminderCron, unconfirmedAppointments } from './routes/reminders.js';
 import { receptionistChat } from './routes/chat.js';
@@ -17,13 +17,13 @@ app.get('/api/profile', publicProfile);
 app.get('/api/health', createDemoAccessMiddleware(), health);
 app.get('/api/slots', createDemoAccessMiddleware(), slots);
 app.post('/api/bookings', createDemoAccessMiddleware(), booking);
-app.post('/api/block-offs', createDemoAccessMiddleware(), blockOff);
-app.get('/api/calendar', createDemoAccessMiddleware(), calendar);
+app.post('/api/block-offs', createStaffAccessMiddleware(), blockOff);
+app.get('/api/calendar', createStaffAccessMiddleware(), calendar);
 app.post('/api/cron/reminders', runReminderCron);
 app.get('/api/owner/:action', ownerAction);
-app.get('/api/appointments/unconfirmed', createDemoAccessMiddleware(), unconfirmedAppointments);
+app.get('/api/appointments/unconfirmed', createStaffAccessMiddleware(), unconfirmedAppointments);
 app.post('/api/chat', createDemoAccessMiddleware(), receptionistChat);
-app.get('/api/dashboard', createDemoAccessMiddleware(), dashboard);
+app.get('/api/dashboard', createStaffAccessMiddleware(), dashboard);
 
 app.use('/api', (request, response) => {
   response.status(404).json({ error: 'API route not found.' });

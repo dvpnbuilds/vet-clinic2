@@ -23,6 +23,7 @@ before(async () => {
   process.env.TURSO_DATABASE_URL = 'file:./' + databaseFile;
   process.env.ACTIVE_CLINIC_PROFILE = 'ph';
   process.env.DEMO_PASSCODE = 'funnel-test';
+  process.env.STAFF_PASSCODE = 'staff-test';
   await rm(databaseFile, { force: true });
   await run(process.execPath, ['db/seed.js'], {
     cwd: process.cwd(),
@@ -58,8 +59,53 @@ test('public funnel books a live slot and staff calendar receives the appointmen
   assert.equal(bookingResponse.status, 201);
   const appointment = (await bookingResponse.json()).appointment;
 
-  const calendarResponse = await request('/api/calendar?date=2026-07-30&view=day', { headers });
+  const publicCalendarResponse = await request('/api/calendar?date=2026-07-30&view=day', { headers });
+  assert.equal(publicCalendarResponse.status, 401);
+
+  const calendarResponse = await request('/api/calendar?date=2026-07-30&view=day', {
+    headers: { 'x-staff-passcode': 'staff-test' }
+  });
   assert.equal(calendarResponse.status, 200);
   const calendar = await calendarResponse.json();
   assert.ok(calendar.appointments.some((item) => item.id === appointment.id));
+});
+
+test('a public demo code cannot read or mutate staff-only routes', async () => {
+  const headers = { 'x-demo-passcode': 'funnel-test' };
+  for (const path of ['/api/dashboard', '/api/appointments/unconfirmed']) {
+    assert.equal((await request(path, { headers })).status, 401);
+  }
+  assert.equal((await request('/api/block-offs', {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({})
+  })).status, 401);
+});
+
+test('public clinic profile never exposes seed fixtures', async () => {
+  const response = await request('/api/profile');
+  assert.equal(response.status, 200);
+  assert.equal(Object.hasOwn((await response.json()).clinic, 'seed'), false);
+});
+
+test('malformed public and staff scheduling requests return safe validation errors', async () => {
+  const publicResponse = await request('/api/bookings', {
+    method: 'POST',
+    headers: { 'x-demo-passcode': 'funnel-test', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      slotId: 'not-a-real-slot',
+      owner: { name: 42, mobile: '+639171234567' },
+      pet: { name: 'Mochi', species: 'dog' }
+    })
+  });
+  assert.equal(publicResponse.status, 400);
+  assert.equal((await publicResponse.json()).error, 'Owner name must be text.');
+
+  const staffResponse = await request('/api/block-offs', {
+    method: 'POST',
+    headers: { 'x-staff-passcode': 'staff-test', 'content-type': 'application/json' },
+    body: 'null'
+  });
+  assert.equal(staffResponse.status, 400);
+  assert.equal((await staffResponse.json()).error, 'Invalid JSON request body.');
 });

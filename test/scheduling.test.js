@@ -46,6 +46,26 @@ test('generated slots respect clinic hours and service duration', async () => {
   assert.ok(slots.every((slot) => slot.endsAt <= '2026-07-27T09:00:00.000Z'));
 });
 
+test('scheduling rejects malformed values before starting a write transaction', async () => {
+  const slot = (await listSlots({ date: '2026-07-31', serviceId: 'service-consult' }))[0];
+  await assert.rejects(
+    () => bookSlot({
+      slotId: slot.id,
+      owner: { name: 42, mobile: '+639171234567' },
+      pet: { name: 'Mochi', species: 'dog' }
+    }),
+    (error) => error instanceof SchedulingError && error.status === 400 && error.message === 'Owner name must be text.'
+  );
+  await assert.rejects(
+    () => listSlots({ date: '2026-07-31', serviceId: ['service-consult'] }),
+    (error) => error instanceof SchedulingError && error.status === 400
+  );
+  await assert.rejects(
+    () => createBlockOff(null),
+    (error) => error instanceof SchedulingError && error.status === 400 && error.message === 'Block-off details are required.'
+  );
+});
+
 test('concurrent requests cannot double-book the same slot', async () => {
   const slots = await listSlots({ date: '2026-07-28', serviceId: 'service-consult' });
   const slot = slots[0];

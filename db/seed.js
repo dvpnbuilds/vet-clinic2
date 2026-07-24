@@ -9,6 +9,7 @@ const schemaPath = fileURLToPath(new URL('./schema.sql', import.meta.url));
 async function clearDemoData(db) {
   await db.executeMultiple([
     'DELETE FROM demo_rate_limits',
+    'DELETE FROM reminder_delivery_attempts',
     'DELETE FROM reminders',
     'DELETE FROM vaccinations',
     'DELETE FROM slot_reservations',
@@ -32,9 +33,7 @@ async function seed() {
   await db.executeMultiple(schema);
   await clearDemoData(db);
 
-  const vetId = 'vet-dr-santos';
-  const ownerId = 'owner-maria-cruz';
-  const petId = 'pet-bantay';
+  const { vet, owner, pet, vaccination } = profile.seed;
   const service = profile.services[0];
   const appointmentStart = new Date(Date.now() + 4 * 60 * 60 * 1000);
   appointmentStart.setMinutes(0, 0, 0);
@@ -54,31 +53,31 @@ async function seed() {
 
   await db.execute({
     sql: 'INSERT INTO vets (id, clinic_id, name, title) VALUES (?, ?, ?, ?)',
-    args: [vetId, profile.id, 'Dr. Ana Santos', 'Veterinarian']
+    args: [vet.id, profile.id, vet.name, vet.title]
   });
 
   for (const hours of profile.hours) {
     await db.execute({
       sql: 'INSERT INTO vet_hours (id, vet_id, weekday, starts_at, ends_at, capacity) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [randomUUID(), vetId, hours.weekday, hours.startsAt, hours.endsAt, hours.capacity]
+      args: [randomUUID(), vet.id, hours.weekday, hours.startsAt, hours.endsAt, hours.capacity]
     });
   }
 
   await db.execute({
     sql: 'INSERT INTO owners (id, clinic_id, name, mobile, email, preferred_channel) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [ownerId, profile.id, 'Maria Cruz', '+639175550001', 'maria.cruz@example.test', 'sms']
+    args: [owner.id, profile.id, owner.name, owner.mobile, owner.email, owner.preferredChannel]
   });
   await db.execute({
     sql: 'INSERT INTO pets (id, clinic_id, owner_id, name, species, breed) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [petId, profile.id, ownerId, 'Bantay', 'dog', 'Aspin']
+    args: [pet.id, profile.id, owner.id, pet.name, pet.species, pet.breed]
   });
   await db.execute({
     sql: 'INSERT INTO vaccinations (id, pet_id, name, administered_on, due_on) VALUES (?, ?, ?, ?, ?)',
-    args: [randomUUID(), petId, '5-in-1', '2025-07-25', '2026-07-25']
+    args: [randomUUID(), pet.id, vaccination.name, vaccination.administeredOn, vaccination.dueOn]
   });
   await db.execute({
     sql: 'INSERT INTO appointments (id, clinic_id, vet_id, service_id, owner_id, pet_id, starts_at, ends_at, confirmation_token, reschedule_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    args: [randomUUID(), profile.id, vetId, service.id, ownerId, petId, appointmentStart.toISOString(), appointmentEnd.toISOString(), randomUUID(), randomUUID()]
+    args: [randomUUID(), profile.id, vet.id, service.id, owner.id, pet.id, appointmentStart.toISOString(), appointmentEnd.toISOString(), randomUUID(), randomUUID()]
   });
 
   console.log('Seeded ' + profile.name + ' (' + profile.slug + ') to Turso.');

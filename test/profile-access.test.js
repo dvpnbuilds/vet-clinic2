@@ -1,17 +1,27 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { getClientIp } from '../routes/demo-access.js';
 import { requestHeader, setResponseHeader } from '../routes/http.js';
 import { getActiveClinicProfile } from '../db/profiles/index.js';
 
 test('profile-owned access copy switches with the active clinic language', () => {
   process.env.ACTIVE_CLINIC_PROFILE = 'ph';
   assert.equal(getActiveClinicProfile().access.bookingAction, 'Magpatuloy');
+  assert.equal(getActiveClinicProfile().access.staffLabel, 'Staff access code');
 
   process.env.ACTIVE_CLINIC_PROFILE = 'western';
   assert.equal(getActiveClinicProfile().access.bookingAction, 'Continue');
+  assert.equal(getActiveClinicProfile().access.staffLabel, 'Staff access code');
   assert.equal(getActiveClinicProfile().access.error.includes('Hindi'), false);
   process.env.ACTIVE_CLINIC_PROFILE = 'ph';
+});
+
+test('dashboard never interpolates appointment data as HTML', async () => {
+  const source = await readFile('public/dashboard.js', 'utf8');
+  assert.equal(source.includes('innerHTML'), false);
+  assert.match(source, /pet\.textContent = appointment\.pet_name/);
+  assert.match(source, /summary\.textContent = appointment\.service_name/);
 });
 
 test('pre-access pages do not embed an English access-screen fallback', async () => {
@@ -40,4 +50,16 @@ test('request header helpers support Vercel-style request and response objects',
   assert.equal(requestHeader(request, 'x-demo-passcode'), 'vercel-code');
   setResponseHeader(response, 'RateLimit-Limit', '60');
   assert.equal(response.values['RateLimit-Limit'], '60');
+});
+
+test('rate limiting ignores a spoofed forwarded chain when a verified address is available', () => {
+  assert.equal(getClientIp({
+    headers: { 'x-forwarded-for': '198.51.100.24, 10.0.0.1' },
+    ip: '203.0.113.8',
+    socket: { remoteAddress: '127.0.0.1' }
+  }), '203.0.113.8');
+  assert.equal(getClientIp({
+    headers: { 'x-vercel-forwarded-for': '203.0.113.9', 'x-forwarded-for': '198.51.100.24, 10.0.0.1' },
+    ip: '203.0.113.8'
+  }), '203.0.113.9');
 });

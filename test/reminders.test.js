@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import test, { after, before } from 'node:test';
@@ -63,6 +64,41 @@ test('cron sends due records once and stays idempotent when repeated', async () 
   assert.equal(deliveredPayloads.length, first.delivered.length);
   assert.ok(deliveredPayloads[0].message.includes('/api/owner/confirm?token='));
   assert.ok(deliveredPayloads[0].message.includes('/api/owner/reschedule?token='));
+});
+
+test('an ambiguous post-delivery persistence failure is held and never resent automatically', async () => {
+  const appointment = (await query('SELECT id, clinic_id FROM appointments LIMIT 1')).rows[0];
+  const reminderId = randomUUID();
+  await query(
+    'INSERT INTO reminders (id, clinic_id, appointment_id, type, channel, due_at, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [reminderId, appointment.clinic_id, appointment.id, 'confirm', 'sms', '2026-07-01T00:00:00.000Z', 'ambiguous-' + reminderId]
+  );
+
+  const delivered = [];
+  const first = await processReminderCron({
+    now: new Date('2026-07-03T12:00:00.000Z'),
+    sendNotification: async (payload) => {
+      delivered.push(payload);
+      return { providerMessageId: 'provider-accepted' };
+    },
+    markReminderSent: async () => {
+      throw new Error('Turso write failed after provider acceptance');
+    }
+  });
+
+  assert.equal(delivered.length, 1);
+  assert.ok(first.failed.some((item) => item.id === reminderId));
+  assert.equal((await query('SELECT status FROM reminders WHERE id = ?', [reminderId])).rows[0].status, 'failed');
+  assert.equal((await query('SELECT outcome FROM reminder_delivery_attempts WHERE reminder_id = ?', [reminderId])).rows[0].outcome, 'uncertain');
+
+  await processReminderCron({
+    now: new Date('2026-07-03T12:10:00.000Z'),
+    sendNotification: async (payload) => {
+      delivered.push(payload);
+      return { providerMessageId: 'should-not-send' };
+    }
+  });
+  assert.equal(delivered.length, 1);
 });
 
 test('DRY_RUN never calls a delivery provider', async () => {

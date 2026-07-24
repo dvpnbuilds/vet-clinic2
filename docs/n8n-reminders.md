@@ -7,6 +7,6 @@ Create an n8n workflow with a Schedule Trigger (every 5–15 minutes) followed b
 - Header: x-cron-secret with your CRON_SECRET value
 - Response: JSON
 
-The application decides what is due. The schedule is deliberately a window, not a stopwatch: each request creates missing reminder records, claims only due-and-unsent reminders, and safely retries abandoned claims on a later run.
+The application decides what is due. The schedule is deliberately a window, not a stopwatch: each request creates missing reminder records, claims only due-and-unsent reminders, and safely retries abandoned claims on a later run. Once a provider call begins, the reminder is durably marked as in delivery; an ambiguous provider or database outcome is held for reconciliation rather than automatically resent and charged twice.
 
 Set DRY_RUN=true while demoing. Change it to false only after configuring SEMAPHORE_API_KEY, RESEND_API_KEY, and RESEND_FROM_EMAIL.

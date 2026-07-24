@@ -1,12 +1,12 @@
-const state = { code: '', profile: null };
+const state = { staffCode: '', profile: null };
 const byId = (id) => document.getElementById(id);
 
 function renderAccess(profile) {
   document.documentElement.lang = profile.language === 'taglish' ? 'fil' : 'en';
-  byId('access-title').textContent = profile.access.dashboardTitle;
-  byId('access-help').textContent = profile.access.help;
-  byId('access-label').textContent = profile.access.label;
-  byId('access-action').textContent = profile.access.dashboardAction;
+  byId('access-title').textContent = profile.access.staffTitle;
+  byId('access-help').textContent = profile.access.staffHelp;
+  byId('access-label').textContent = profile.access.staffLabel;
+  byId('access-action').textContent = profile.access.staffAction;
 }
 
 async function loadAccessProfile() {
@@ -17,7 +17,7 @@ async function loadAccessProfile() {
 }
 
 async function api(path) {
-  const response = await fetch(path, { headers: { 'x-demo-passcode': state.code } });
+  const response = await fetch(path, { headers: { 'x-staff-passcode': state.staffCode } });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || 'Request failed.');
   return data;
@@ -68,19 +68,33 @@ function renderDashboard(data) {
   byId('recovered-count').textContent = data.recovered.appointments + ' ' + copy.appointments;
   list('calendar-list', data.calendar, copy.emptyToday, (appointment) => {
     const item = document.createElement('li');
-    item.innerHTML = '<time>' + clinicTime(appointment.starts_at) + '</time><div><strong>' + appointment.pet_name
-      + '</strong><span>' + appointment.service_name + ' · ' + appointment.owner_name + '</span></div>';
+    const time = document.createElement('time');
+    time.textContent = clinicTime(appointment.starts_at);
+    const details = document.createElement('div');
+    const pet = document.createElement('strong');
+    pet.textContent = appointment.pet_name;
+    const summary = document.createElement('span');
+    summary.textContent = appointment.service_name + ' · ' + appointment.owner_name;
+    details.append(pet, summary);
+    item.append(time, details);
     return item;
   });
   list('pending-list', data.pending, copy.emptyPending, (appointment) => {
     const item = document.createElement('li');
-    item.innerHTML = '<strong>' + appointment.pet_name + '</strong><span>' + appointment.owner_name + ' · '
-      + clinicTime(appointment.starts_at) + '</span>';
+    const pet = document.createElement('strong');
+    pet.textContent = appointment.pet_name;
+    const summary = document.createElement('span');
+    summary.textContent = appointment.owner_name + ' · ' + clinicTime(appointment.starts_at);
+    item.append(pet, summary);
     return item;
   });
   list('vaccines-list', data.vaccines, copy.emptyVaccines, (vaccine) => {
     const item = document.createElement('li');
-    item.innerHTML = '<strong>' + vaccine.pet_name + '</strong><span>' + vaccine.vaccine_name + ' · ' + vaccine.owner_name + '</span>';
+    const pet = document.createElement('strong');
+    pet.textContent = vaccine.pet_name;
+    const summary = document.createElement('span');
+    summary.textContent = vaccine.vaccine_name + ' · ' + vaccine.owner_name;
+    item.append(pet, summary);
     return item;
   });
 }
@@ -102,22 +116,22 @@ function renderProfile() {
 
 byId('access-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  state.code = byId('access-code').value.trim();
-  if (!state.code) return;
+  state.staffCode = byId('access-code').value.trim();
+  if (!state.staffCode) return;
   try {
-    state.profile = (await api('/api/health')).clinic;
+    state.profile = (await api('/api/profile')).clinic;
     renderProfile();
     byId('dashboard-status').textContent = state.profile.dashboard.loading;
     renderDashboard(await api('/api/dashboard'));
     byId('dashboard-status').textContent = '';
     byId('access-card').classList.add('is-hidden');
     byId('dashboard-app').classList.remove('is-hidden');
-    sessionStorage.setItem('vetflow-demo-code', state.code);
+    sessionStorage.setItem('vetflow-staff-code', state.staffCode);
   } catch {
-    byId('access-message').textContent = state.profile?.access.error || '';
+    byId('access-message').textContent = state.profile?.access.staffError || '';
   }
 });
 
-const rememberedCode = sessionStorage.getItem('vetflow-demo-code');
+const rememberedCode = sessionStorage.getItem('vetflow-staff-code');
 loadAccessProfile();
 if (rememberedCode) byId('access-code').value = rememberedCode;

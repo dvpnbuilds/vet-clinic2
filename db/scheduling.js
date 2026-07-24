@@ -4,6 +4,7 @@ import { getActiveClinicProfile } from './profiles/index.js';
 
 const SLICE_MINUTES = 10;
 const ACTIVE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'completed'];
+const PET_SPECIES = new Set(['dog', 'cat', 'other']);
 
 export class SchedulingError extends Error {
   constructor(message, status = 400) {
@@ -17,7 +18,7 @@ function asRows(result) {
 }
 
 function parseDate(date) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new SchedulingError('date must use YYYY-MM-DD.');
   }
   const parsed = new Date(date + 'T00:00:00.000Z');
@@ -92,16 +93,73 @@ function listSlices(startsAt, endsAt) {
   return slices;
 }
 
+function requiredString(value, label, maxLength) {
+  if (typeof value !== 'string') {
+    throw new SchedulingError(label + ' must be text.');
+  }
+  const trimmed = value.trim();
+  if (!trimmed) throw new SchedulingError(label + ' is required.');
+  if (trimmed.length > maxLength) {
+    throw new SchedulingError(label + ' must be ' + maxLength + ' characters or fewer.');
+  }
+  return trimmed;
+}
+
+function optionalString(value, label, maxLength) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') throw new SchedulingError(label + ' must be text.');
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > maxLength) {
+    throw new SchedulingError(label + ' must be ' + maxLength + ' characters or fewer.');
+  }
+  return trimmed;
+}
+
 function validateBookingInput(input) {
-  if (!input || typeof input !== 'object') {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new SchedulingError('Booking details are required.');
   }
-  if (!input.slotId || !input.owner?.name || !input.pet?.name || !input.pet?.species) {
-    throw new SchedulingError('slotId, owner name, pet name, and pet species are required.');
+  if (!input.owner || typeof input.owner !== 'object' || Array.isArray(input.owner)) {
+    throw new SchedulingError('Owner details are required.');
   }
-  if (!input.owner.mobile && !input.owner.email) {
+  if (!input.pet || typeof input.pet !== 'object' || Array.isArray(input.pet)) {
+    throw new SchedulingError('Pet details are required.');
+  }
+
+  const slotId = requiredString(input.slotId, 'slotId', 600);
+  const ownerName = requiredString(input.owner.name, 'Owner name', 120);
+  const mobile = optionalString(input.owner.mobile, 'Mobile number', 32);
+  const email = optionalString(input.owner.email, 'Email address', 254);
+  if (!mobile && !email) {
     throw new SchedulingError('An owner mobile number or email is required.');
   }
+  if (mobile && !/^\+?[0-9][0-9() -]{6,24}$/.test(mobile)) {
+    throw new SchedulingError('Mobile number is invalid.');
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new SchedulingError('Email address is invalid.');
+  }
+
+  const species = requiredString(input.pet.species, 'Pet species', 16).toLowerCase();
+  if (!PET_SPECIES.has(species)) {
+    throw new SchedulingError('Pet species is invalid.');
+  }
+  const birthDate = optionalString(input.pet.birthDate, 'Pet birth date', 10);
+  if (birthDate) parseDate(birthDate);
+
+  return {
+    slotId,
+    owner: { name: ownerName, mobile, email },
+    pet: {
+      name: requiredString(input.pet.name, 'Pet name', 120),
+      species,
+      breed: optionalString(input.pet.breed, 'Breed', 120),
+      birthDate,
+      notes: optionalString(input.pet.notes, 'Pet notes', 1_000)
+    },
+    notes: optionalString(input.notes, 'Appointment notes', 1_000)
+  };
 }
 
 async function loadClinicAndService(serviceId) {
@@ -142,7 +200,12 @@ async function remainingCapacity(vetId, startsAt, endsAt, capacity) {
   return Math.min(...listSlices(startsAt, endsAt).map((slice) => capacity - (counts.get(slice) || 0)));
 }
 
-export async function listSlots({ date, serviceId }) {
+export async function listSlots(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SchedulingError('Slot search details are required.');
+  }
+  const { date } = input;
+  const serviceId = requiredString(input.serviceId, 'serviceId', 160);
   const { profile, service } = await loadClinicAndService(serviceId);
   const localDate = parseDate(date);
   const weekday = localDate.getUTCDay();
@@ -206,7 +269,7 @@ async function transactionRows(transaction, sql, args = []) {
 }
 
 export async function bookSlot(input) {
-  validateBookingInput(input);
+  input = validateBookingInput(input);
   const profile = getActiveClinicProfile();
   let transaction;
   try {
@@ -301,7 +364,14 @@ export async function bookSlot(input) {
   }
 }
 
-export async function createBlockOff({ vetId = null, startsAt, endsAt, reason = null }) {
+export async function createBlockOff(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SchedulingError('Block-off details are required.');
+  }
+  const vetId = optionalString(input.vetId, 'vetId', 160);
+  const startsAt = requiredString(input.startsAt, 'Block-off start time', 40);
+  const endsAt = requiredString(input.endsAt, 'Block-off end time', 40);
+  const reason = optionalString(input.reason, 'Block-off reason', 500);
   const profile = getActiveClinicProfile();
   const start = new Date(startsAt);
   const end = new Date(endsAt);
@@ -322,7 +392,12 @@ export async function createBlockOff({ vetId = null, startsAt, endsAt, reason = 
   return { id, vetId, startsAt: start.toISOString(), endsAt: end.toISOString(), reason };
 }
 
-export async function listCalendar({ date, view = 'day' }) {
+export async function listCalendar(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new SchedulingError('Calendar details are required.');
+  }
+  const { date } = input;
+  const view = input.view === undefined ? 'day' : input.view;
   const profile = getActiveClinicProfile();
   if (!['day', 'week'].includes(view)) {
     throw new SchedulingError('view must be day or week.');

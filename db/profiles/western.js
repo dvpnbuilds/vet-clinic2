@@ -12,13 +12,16 @@ export default {
   access: {
     bookingTitle: 'Book a visit',
     chatTitle: 'Clinic chat',
-    dashboardTitle: 'Staff dashboard',
     help: 'Enter the demo access code from the clinic team to continue.',
     label: 'Demo access code',
     bookingAction: 'Continue',
     chatAction: 'Continue',
-    dashboardAction: 'Open dashboard',
-    error: 'We could not access the demo. Check the code and try again.'
+    error: 'We could not access the demo. Check the code and try again.',
+    staffTitle: 'Staff dashboard',
+    staffHelp: 'Enter the staff access code to view the live clinic desk.',
+    staffLabel: 'Staff access code',
+    staffAction: 'Open dashboard',
+    staffError: 'We could not access the staff dashboard. Check the code and try again.'
   },
   booking: {
     kicker: 'Online appointment',
@@ -113,6 +116,12 @@ export default {
     demoError: 'We could not access the dashboard. Check the demo code.',
     loading: 'Loading live clinic data...',
     bookingLink: 'Booking'
+  },
+  seed: {
+    vet: { id: 'vet-dr-reid', name: 'Dr. Charlotte Reid', title: 'Veterinarian' },
+    owner: { id: 'owner-amelia-harris', name: 'Amelia Harris', mobile: '+61412345678', email: 'amelia.harris@example.test', preferredChannel: 'sms' },
+    pet: { id: 'pet-scout', name: 'Scout', species: 'dog', breed: 'Australian Kelpie' },
+    vaccination: { name: 'C5', administeredOn: '2025-07-25', dueOn: '2026-07-25' }
   },
   services: [
     { id: 'service-consult', name: 'General Consultation', description: 'A check-up for your pet.', durationMinutes: 30, priceCentavos: 8500 },

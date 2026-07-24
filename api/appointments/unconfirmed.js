@@ -1,8 +1,8 @@
-import { createDemoAccessMiddleware } from '../../routes/demo-access.js';
+import { createStaffAccessMiddleware } from '../../routes/demo-access.js';
 import { unconfirmedAppointments } from '../../routes/reminders.js';
 
-const protectDemo = createDemoAccessMiddleware();
+const protectStaff = createStaffAccessMiddleware();
 
 export default function handler(request, response) {
-  return protectDemo(request, response, () => unconfirmedAppointments(request, response));
+  return protectStaff(request, response, () => unconfirmedAppointments(request, response));
 }

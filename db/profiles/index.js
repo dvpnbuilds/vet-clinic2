@@ -14,4 +14,9 @@ export function getActiveClinicProfile() {
   return profile;
 }
 
+export function getPublicClinicProfile() {
+  const { seed, ...profile } = getActiveClinicProfile();
+  return profile;
+}
+
 export { profiles };

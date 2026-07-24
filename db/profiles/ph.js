@@ -12,13 +12,16 @@ export default {
   access: {
     bookingTitle: 'Mag-book ng visit',
     chatTitle: 'Clinic chat',
-    dashboardTitle: 'Staff dashboard',
     help: 'Ilagay ang demo access code mula sa clinic team para magpatuloy.',
     label: 'Demo access code',
     bookingAction: 'Magpatuloy',
     chatAction: 'Magpatuloy',
-    dashboardAction: 'Buksan ang dashboard',
-    error: 'Hindi ma-access ang demo. Suriin ang code at subukan ulit.'
+    error: 'Hindi ma-access ang demo. Suriin ang code at subukan ulit.',
+    staffTitle: 'Staff dashboard',
+    staffHelp: 'Ilagay ang staff access code para makita ang live clinic desk.',
+    staffLabel: 'Staff access code',
+    staffAction: 'Buksan ang dashboard',
+    staffError: 'Hindi ma-access ang staff dashboard. Suriin ang code at subukan ulit.'
   },
   booking: {
     kicker: 'Online appointment',
@@ -113,6 +116,12 @@ export default {
     demoError: 'Hindi ma-access ang dashboard. Suriin ang demo code.',
     loading: 'Kinukuha ang live clinic data...',
     bookingLink: 'Mag-book'
+  },
+  seed: {
+    vet: { id: 'vet-dr-santos', name: 'Dr. Ana Santos', title: 'Veterinarian' },
+    owner: { id: 'owner-maria-cruz', name: 'Maria Cruz', mobile: '+639175550001', email: 'maria.cruz@example.test', preferredChannel: 'sms' },
+    pet: { id: 'pet-bantay', name: 'Bantay', species: 'dog', breed: 'Aspin' },
+    vaccination: { name: '5-in-1', administeredOn: '2025-07-25', dueOn: '2026-07-25' }
   },
   services: [
     { id: 'service-consult', name: 'General Consultation', description: 'Check-up para sa inyong alaga.', durationMinutes: 30, priceCentavos: 65000 },

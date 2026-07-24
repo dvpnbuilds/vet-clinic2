@@ -5,6 +5,7 @@ import { notify } from '../notify/index.js';
 
 const APPOINTMENT_STATUSES = ['pending', 'confirmed'];
 const CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
+let deliveryAttemptSchemaReady = false;
 
 export class ReminderError extends Error {
   constructor(message, status = 400) {
@@ -49,6 +50,22 @@ function reminderChannel(item) {
   if (item.mobile) return 'sms';
   if (item.email) return 'email';
   return null;
+}
+
+async function ensureDeliveryAttemptSchema() {
+  if (deliveryAttemptSchemaReady) return;
+  await query([
+    'CREATE TABLE IF NOT EXISTS reminder_delivery_attempts (',
+    'reminder_id TEXT PRIMARY KEY REFERENCES reminders(id) ON DELETE CASCADE,',
+    'claim_token TEXT NOT NULL,',
+    'started_at TEXT NOT NULL,',
+    "outcome TEXT NOT NULL DEFAULT 'delivering' CHECK (outcome IN ('delivering', 'sent', 'uncertain')),",
+    'provider_message_id TEXT,',
+    'last_error TEXT',
+    ')'
+  ].join(' '));
+  await query('CREATE INDEX IF NOT EXISTS idx_reminder_delivery_attempts_outcome ON reminder_delivery_attempts (outcome, started_at)');
+  deliveryAttemptSchemaReady = true;
 }
 
 async function insertReminder({ clinicId, appointmentId = null, petId = null, type, channel, dueAt, dedupeKey }) {
@@ -141,10 +158,18 @@ async function enqueueVaccineReminders(profile, nowIso) {
 async function claimReminder(reminderId, nowIso, staleBeforeIso) {
   const claimToken = randomUUID();
   const result = await query(
-    'UPDATE reminders SET status = ?, claim_token = ?, claimed_at = ?, last_error = NULL WHERE id = ? AND sent_at IS NULL AND (status = ? OR (status = ? AND claimed_at < ?))',
+    'UPDATE reminders SET status = ?, claim_token = ?, claimed_at = ?, last_error = NULL WHERE id = ? AND sent_at IS NULL AND NOT EXISTS (SELECT 1 FROM reminder_delivery_attempts WHERE reminder_id = reminders.id) AND (status = ? OR (status = ? AND claimed_at < ?))',
     ['processing', claimToken, nowIso, reminderId, 'pending', 'processing', staleBeforeIso]
   );
   return result.rowsAffected > 0 ? claimToken : null;
+}
+
+async function beginDelivery(reminderId, claimToken, nowIso) {
+  const result = await query(
+    'INSERT OR IGNORE INTO reminder_delivery_attempts (reminder_id, claim_token, started_at) VALUES (?, ?, ?)',
+    [reminderId, claimToken, nowIso]
+  );
+  return result.rowsAffected > 0;
 }
 
 async function reminderContext(reminderId) {
@@ -186,28 +211,49 @@ function buildMessage(profile, reminder) {
 }
 
 async function markSent(reminderId, claimToken, result, nowIso) {
+  const updated = await query(
+    'UPDATE reminders SET status = ?, sent_at = ?, provider_message_id = ?, claim_token = NULL WHERE id = ? AND claim_token = ? AND EXISTS (SELECT 1 FROM reminder_delivery_attempts WHERE reminder_id = reminders.id AND claim_token = ?)',
+    ['sent', nowIso, result.providerMessageId || null, reminderId, claimToken, claimToken]
+  );
+  if (updated.rowsAffected === 0) throw new Error('Reminder delivery could not be recorded.');
   await query(
-    'UPDATE reminders SET status = ?, sent_at = ?, provider_message_id = ?, claim_token = NULL WHERE id = ? AND claim_token = ?',
-    ['sent', nowIso, result.providerMessageId || null, reminderId, claimToken]
+    'UPDATE reminder_delivery_attempts SET outcome = ?, provider_message_id = ?, last_error = NULL WHERE reminder_id = ? AND claim_token = ?',
+    ['sent', result.providerMessageId || null, reminderId, claimToken]
   );
 }
 
-async function releaseFailedClaim(reminderId, claimToken, error) {
+async function markDeliveryUncertain(reminderId, claimToken, error) {
+  const message = String(error.message || error).slice(0, 500);
+  try {
+    await query(
+      'UPDATE reminder_delivery_attempts SET outcome = ?, last_error = ? WHERE reminder_id = ? AND claim_token = ?',
+      ['uncertain', message, reminderId, claimToken]
+    );
+  } finally {
+    await query(
+      'UPDATE reminders SET status = ?, last_error = ? WHERE id = ? AND claim_token = ? AND sent_at IS NULL',
+      ['failed', message, reminderId, claimToken]
+    );
+  }
+}
+
+async function releasePreDeliveryClaim(reminderId, claimToken, error) {
   await query(
     'UPDATE reminders SET status = ?, claim_token = NULL, last_error = ? WHERE id = ? AND claim_token = ?',
     ['pending', String(error.message || error).slice(0, 500), reminderId, claimToken]
   );
 }
 
-export async function processReminderCron({ now = new Date(), sendNotification = notify } = {}) {
+export async function processReminderCron({ now = new Date(), sendNotification = notify, markReminderSent = markSent } = {}) {
   const profile = getActiveClinicProfile();
   const nowIso = iso(now);
+  await ensureDeliveryAttemptSchema();
   await flagNoShows(profile, nowIso);
   await enqueueAppointmentReminders(profile, nowIso);
   await enqueueVaccineReminders(profile, nowIso);
 
   const due = rows(await query(
-    'SELECT id FROM reminders WHERE due_at <= ? AND sent_at IS NULL AND (status = ? OR (status = ? AND claimed_at < ?)) ORDER BY due_at',
+    'SELECT r.id FROM reminders r WHERE r.due_at <= ? AND r.sent_at IS NULL AND NOT EXISTS (SELECT 1 FROM reminder_delivery_attempts d WHERE d.reminder_id = r.id) AND (r.status = ? OR (r.status = ? AND r.claimed_at < ?)) ORDER BY r.due_at',
     [nowIso, 'pending', 'processing', iso(now.getTime() - CLAIM_TIMEOUT_MS)]
   ));
   const delivered = [];
@@ -217,11 +263,24 @@ export async function processReminderCron({ now = new Date(), sendNotification =
     if (!claimToken) continue;
     try {
       const payload = buildMessage(profile, await reminderContext(item.id));
-      const result = await sendNotification(payload);
-      await markSent(item.id, claimToken, result, nowIso);
-      delivered.push(item.id);
+      if (!await beginDelivery(item.id, claimToken, nowIso)) continue;
+      let result;
+      try {
+        result = await sendNotification(payload);
+      } catch (error) {
+        await markDeliveryUncertain(item.id, claimToken, error);
+        failed.push({ id: item.id, error: error.message });
+        continue;
+      }
+      try {
+        await markReminderSent(item.id, claimToken, result, nowIso);
+        delivered.push(item.id);
+      } catch (error) {
+        await markDeliveryUncertain(item.id, claimToken, error);
+        failed.push({ id: item.id, error: error.message });
+      }
     } catch (error) {
-      await releaseFailedClaim(item.id, claimToken, error);
+      await releasePreDeliveryClaim(item.id, claimToken, error);
       failed.push({ id: item.id, error: error.message });
     }
   }

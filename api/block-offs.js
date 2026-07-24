@@ -1,8 +1,8 @@
-import { createDemoAccessMiddleware } from '../routes/demo-access.js';
+import { createStaffAccessMiddleware } from '../routes/demo-access.js';
 import { blockOff } from '../routes/scheduling-routes.js';
 
-const protectDemo = createDemoAccessMiddleware();
+const protectStaff = createStaffAccessMiddleware();
 
 export default function handler(request, response) {
-  return protectDemo(request, response, () => blockOff(request, response));
+  return protectStaff(request, response, () => blockOff(request, response));
 }
