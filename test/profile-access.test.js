@@ -53,6 +53,7 @@ test('request header helpers support Vercel-style request and response objects',
 });
 
 test('rate limiting ignores a spoofed forwarded chain when a verified address is available', () => {
+  process.env.VERCEL = '1';
   assert.equal(getClientIp({
     headers: { 'x-forwarded-for': '198.51.100.24, 10.0.0.1' },
     ip: '203.0.113.8',
@@ -62,4 +63,5 @@ test('rate limiting ignores a spoofed forwarded chain when a verified address is
     headers: { 'x-vercel-forwarded-for': '203.0.113.9', 'x-forwarded-for': '198.51.100.24, 10.0.0.1' },
     ip: '203.0.113.8'
   }), '203.0.113.9');
+  delete process.env.VERCEL;
 });

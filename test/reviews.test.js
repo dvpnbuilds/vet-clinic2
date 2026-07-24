@@ -29,8 +29,8 @@ async function request(path, options = {}) {
 async function additionalAppointment() {
   const source = (await query('SELECT clinic_id, vet_id, service_id, owner_id, pet_id FROM appointments LIMIT 1')).rows[0];
   const id = randomUUID();
-  const start = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const end = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+  const start = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const end = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   await query(
     'INSERT INTO appointments (id, clinic_id, vet_id, service_id, owner_id, pet_id, starts_at, ends_at, status, confirmation_token, reschedule_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [id, source.clinic_id, source.vet_id, source.service_id, source.owner_id, source.pet_id, start, end, 'confirmed', randomUUID(), randomUUID()]

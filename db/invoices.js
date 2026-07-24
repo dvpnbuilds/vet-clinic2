@@ -17,7 +17,7 @@ async function generateInvoiceOnce(appointmentId) {
     let invoice = rows(await transaction.execute({ sql: 'SELECT id, receipt_token, status, total_centavos FROM invoices WHERE appointment_id = ? AND clinic_id = ?', args: [appointmentId, profile.id] }))[0];
     if (!invoice) {
       invoice = { id: randomUUID(), receipt_token: randomUUID(), status: 'unpaid', total_centavos: Number(visit.price_centavos) };
-      await transaction.execute({ sql: 'INSERT INTO invoices (id, clinic_id, appointment_id, receipt_token, total_centavos) VALUES (?, ?, ?, ?, ?)', args: [invoice.id, profile.id, appointmentId, invoice.receipt_token, invoice.total_centavos] });
+      await transaction.execute({ sql: 'INSERT INTO invoices (id, clinic_id, appointment_id, receipt_token, expires_at, total_centavos) VALUES (?, ?, ?, ?, ?, ?)', args: [invoice.id, profile.id, appointmentId, invoice.receipt_token, new Date(Date.now() + 365 * 86400000).toISOString(), invoice.total_centavos] });
       await transaction.execute({ sql: 'INSERT INTO invoice_items (id, invoice_id, service_id, description, unit_price_centavos, total_centavos) VALUES (?, ?, ?, ?, ?, ?)', args: [randomUUID(), invoice.id, visit.service_id, visit.name, invoice.total_centavos, invoice.total_centavos] });
     }
     await transaction.commit();
@@ -46,10 +46,13 @@ export async function setInvoiceStatus(invoiceId, status) {
   return rows(await query('SELECT id, receipt_token, status, total_centavos FROM invoices WHERE id = ? AND clinic_id = ?', [invoiceId, profile.id]))[0];
 }
 
+export async function rotateReceiptToken(invoiceId) { const profile = getActiveClinicProfile(); const token = randomUUID(); const updated = await query('UPDATE invoices SET receipt_token = ?, expires_at = ?, revoked_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND clinic_id = ?', [token, new Date(Date.now() + 365 * 86400000).toISOString(), invoiceId, profile.id]); if (!updated.rowsAffected) throw new InvoiceError('Invoice record is unavailable.', 404); return { token, receiptUrl: '/receipt.html?token=' + encodeURIComponent(token) }; }
+export async function revokeReceiptToken(invoiceId) { const profile = getActiveClinicProfile(); const updated = await query('UPDATE invoices SET revoked_at = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND clinic_id = ? AND revoked_at IS NULL', [new Date().toISOString(), invoiceId, profile.id]); if (!updated.rowsAffected) throw new InvoiceError('Receipt is unavailable.', 404); return { status: 'revoked' }; }
+
 export async function getReceipt(token) {
   if (!validToken(token)) throw new InvoiceError('This receipt is unavailable.', 404);
   const profile = getActiveClinicProfile();
-  const invoice = rows(await query('SELECT i.id, i.status, i.total_centavos, i.created_at, p.name AS pet_name, o.name AS owner_name FROM invoices i JOIN appointments a ON a.id = i.appointment_id AND a.clinic_id = i.clinic_id JOIN pets p ON p.id = a.pet_id JOIN owners o ON o.id = a.owner_id WHERE i.receipt_token = ? AND i.clinic_id = ?', [token, profile.id]))[0];
+  const invoice = rows(await query('SELECT i.id, i.status, i.total_centavos, i.created_at, p.name AS pet_name, o.name AS owner_name FROM invoices i JOIN appointments a ON a.id = i.appointment_id AND a.clinic_id = i.clinic_id JOIN pets p ON p.id = a.pet_id JOIN owners o ON o.id = a.owner_id WHERE i.receipt_token = ? AND i.clinic_id = ? AND i.revoked_at IS NULL AND i.expires_at > ?', [token, profile.id, new Date().toISOString()]))[0];
   if (!invoice) throw new InvoiceError('This receipt is unavailable.', 404);
   const items = rows(await query('SELECT description, quantity, unit_price_centavos, total_centavos FROM invoice_items WHERE invoice_id = ? ORDER BY id', [invoice.id]));
   return { invoice: { status: invoice.status, totalCentavos: Number(invoice.total_centavos), createdAt: invoice.created_at, petName: invoice.pet_name, ownerName: invoice.owner_name, items } };

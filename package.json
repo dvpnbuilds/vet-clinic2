@@ -11,6 +11,7 @@
     "dev": "node --watch server.js",
     "start": "node server.js",
     "seed": "node db/seed.js",
+    "migrate": "node db/migrate.js",
     "test": "node --test"
   },
   "dependencies": {

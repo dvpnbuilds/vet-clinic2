@@ -84,7 +84,7 @@ export async function completeAppointment(appointmentId, { now = new Date() } = 
   const transaction = await getDb().transaction('write');
   try {
     const appointment = (await transactionRows(transaction,
-      'SELECT a.id, a.status, o.mobile, o.email, o.preferred_channel FROM appointments a JOIN owners o ON o.id = a.owner_id WHERE a.id = ? AND a.clinic_id = ?',
+      'SELECT a.id, a.status, a.ends_at, o.mobile, o.email, o.preferred_channel FROM appointments a JOIN owners o ON o.id = a.owner_id WHERE a.id = ? AND a.clinic_id = ?',
       [appointmentId, profile.id]
     ))[0];
     if (!appointment) throw new ReviewError('Appointment is unavailable.', 404);
@@ -99,6 +99,7 @@ export async function completeAppointment(appointmentId, { now = new Date() } = 
     if (!['pending', 'confirmed'].includes(appointment.status)) {
       throw new ReviewError('Only active appointments can be completed.', 409);
     }
+    if (new Date(appointment.ends_at).getTime() > completedAt.getTime()) throw new ReviewError('This appointment has not ended yet.', 409);
     await transaction.execute({
       sql: 'UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND clinic_id = ?',
       args: ['completed', appointmentId, profile.id]
@@ -110,8 +111,8 @@ export async function completeAppointment(appointmentId, { now = new Date() } = 
       const id = randomUUID();
       const token = randomUUID();
       await transaction.execute({
-        sql: 'INSERT OR IGNORE INTO reviews (id, clinic_id, appointment_id, token, channel, due_at) VALUES (?, ?, ?, ?, ?, ?)',
-        args: [id, profile.id, appointmentId, token, channel, dueAt]
+        sql: 'INSERT OR IGNORE INTO reviews (id, clinic_id, appointment_id, token, expires_at, channel, due_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [id, profile.id, appointmentId, token, new Date(completedAt.getTime() + 365 * 86400000).toISOString(), channel, dueAt]
       });
       review = (await transactionRows(transaction,
         'SELECT id, due_at, status FROM reviews WHERE appointment_id = ? AND clinic_id = ?',
@@ -216,11 +217,15 @@ export async function processReviewRequests({ now = new Date(), sendNotification
   return { delivered, failed };
 }
 
+export async function listReviewReconciliation() { const profile = getActiveClinicProfile(); return rows(await query('SELECT id, appointment_id, last_error, delivery_started_at FROM reviews WHERE clinic_id = ? AND status = ? AND sent_at IS NULL ORDER BY delivery_started_at DESC', [profile.id, 'failed'])); }
+export async function retryReview(id) { const profile = getActiveClinicProfile(); const updated = await query('UPDATE reviews SET status = ?, delivery_started_at = NULL, claim_token = NULL, claimed_at = NULL WHERE id = ? AND clinic_id = ? AND status = ? AND sent_at IS NULL', ['pending', id, profile.id, 'failed']); if (!updated.rowsAffected) throw new ReviewError('Review request is unavailable.', 404); return rows(await query('SELECT id, status FROM reviews WHERE id = ? AND clinic_id = ?', [id, profile.id]))[0]; }
+export async function revokeReviewToken(id) { const profile = getActiveClinicProfile(); const updated = await query('UPDATE reviews SET revoked_at = ? WHERE id = ? AND clinic_id = ? AND revoked_at IS NULL', [new Date().toISOString(), id, profile.id]); if (!updated.rowsAffected) throw new ReviewError('Review request is unavailable.', 404); return { status: 'revoked' }; }
+
 export async function previewReview(token) {
   const profile = getActiveClinicProfile();
   const review = rows(await query(
-    'SELECT r.id, r.rating, r.feedback, p.name AS pet_name FROM reviews r JOIN appointments a ON a.id = r.appointment_id JOIN pets p ON p.id = a.pet_id WHERE r.token = ? AND r.clinic_id = ? AND r.sent_at IS NOT NULL',
-    [token, profile.id]
+    'SELECT r.id, r.rating, r.feedback, p.name AS pet_name FROM reviews r JOIN appointments a ON a.id = r.appointment_id JOIN pets p ON p.id = a.pet_id WHERE r.token = ? AND r.clinic_id = ? AND r.sent_at IS NOT NULL AND r.revoked_at IS NULL AND r.expires_at > ?',
+    [token, profile.id, new Date().toISOString()]
   ))[0];
   if (!review) throw new ReviewError('This review link is unavailable.', 404);
   return { rating: review.rating, feedbackSubmitted: Boolean(review.feedback), petName: review.pet_name };
@@ -230,18 +235,19 @@ export async function submitRating(token, value) {
   const profile = getActiveClinicProfile();
   const rating = ratingValue(value);
   const review = rows(await query(
-    'SELECT id, rating FROM reviews WHERE token = ? AND clinic_id = ? AND sent_at IS NOT NULL',
-    [token, profile.id]
+    'SELECT id, rating FROM reviews WHERE token = ? AND clinic_id = ? AND sent_at IS NOT NULL AND revoked_at IS NULL AND expires_at > ?',
+    [token, profile.id, new Date().toISOString()]
   ))[0];
   if (!review) throw new ReviewError('This review link is unavailable.', 404);
-  if (review.rating !== null && Number(review.rating) !== rating) {
+  if (review.rating !== null) {
     throw new ReviewError('This review link has already been used.', 409);
   }
   if (review.rating === null) {
     const saved = await query('UPDATE reviews SET rating = ?, rated_at = ? WHERE id = ? AND clinic_id = ? AND rating IS NULL', [rating, new Date().toISOString(), review.id, profile.id]);
     if (!saved.rowsAffected) {
       const winner = rows(await query('SELECT rating FROM reviews WHERE id = ? AND clinic_id = ?', [review.id, profile.id]))[0];
-      if (!winner || Number(winner.rating) !== rating) throw new ReviewError('This review link has already been used.', 409);
+    if (!winner) throw new ReviewError('This review link has already been used.', 409);
+    throw new ReviewError('This review link has already been used.', 409);
     }
   }
   return rating >= 4
@@ -253,8 +259,8 @@ export async function submitFeedback(token, value) {
   const profile = getActiveClinicProfile();
   const feedback = feedbackText(value);
   const review = rows(await query(
-    'SELECT id, rating, feedback FROM reviews WHERE token = ? AND clinic_id = ? AND sent_at IS NOT NULL',
-    [token, profile.id]
+    'SELECT id, rating, feedback FROM reviews WHERE token = ? AND clinic_id = ? AND sent_at IS NOT NULL AND revoked_at IS NULL AND expires_at > ?',
+    [token, profile.id, new Date().toISOString()]
   ))[0];
   if (!review) throw new ReviewError('This review link is unavailable.', 404);
   if (!review.rating || Number(review.rating) > 3) throw new ReviewError('Private feedback is unavailable for this rating.', 409);
@@ -303,3 +309,6 @@ export async function submitReviewFeedbackRoute(request, response) {
     return response.status(500).json({ error: 'Review feedback is temporarily unavailable.' });
   }
 }
+export async function reviewReconciliationRoute(request, response) { try { return response.status(200).json({ reviews: await listReviewReconciliation() }); } catch (error) { return response.status(error.status || 500).json({ error: error.message || 'Review reconciliation is unavailable.' }); } }
+export async function retryReviewRoute(request, response) { try { return response.status(200).json({ review: await retryReview(request.params?.id || request.query?.id) }); } catch (error) { return response.status(error.status || 500).json({ error: error.message || 'Review retry is unavailable.' }); } }
+export async function revokeReviewRoute(request, response) { try { return response.status(200).json({ review: await revokeReviewToken(request.params?.id || request.query?.id) }); } catch (error) { return response.status(error.status || 500).json({ error: error.message || 'Review revocation is unavailable.' }); } }

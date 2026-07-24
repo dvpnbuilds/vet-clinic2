@@ -11,8 +11,10 @@ function singleIp(value) {
 export function getClientIp(request) {
   // Vercel overwrites this platform header on direct deployments, so it cannot
   // be selected by an attacker from a forwarded chain.
-  const vercelIp = singleIp(requestHeader(request, 'x-vercel-forwarded-for'));
-  if (vercelIp) return vercelIp;
+  if (process.env.VERCEL === '1') {
+    const vercelIp = singleIp(requestHeader(request, 'x-vercel-forwarded-for'));
+    if (vercelIp) return vercelIp;
+  }
 
   if (typeof request.ip === 'string' && request.ip) return request.ip;
   if (typeof request.socket?.remoteAddress === 'string' && request.socket.remoteAddress) {

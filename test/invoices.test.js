@@ -14,7 +14,8 @@ after(() => getDb().close());
 
 test('a completed appointment creates one itemized invoice and a tokenized receipt', async () => {
   const appointment = (await query('SELECT id FROM appointments WHERE status = ? LIMIT 1', ['pending'])).rows[0];
-  await completeAppointment(appointment.id);
+  const endsAt = (await query('SELECT ends_at FROM appointments WHERE id = ?', [appointment.id])).rows[0].ends_at;
+  await completeAppointment(appointment.id, { now: new Date(new Date(endsAt).getTime() + 1) });
   const invoice = await generateInvoice(appointment.id);
   const replay = await generateInvoice(appointment.id);
   assert.equal(invoice.id, replay.id);

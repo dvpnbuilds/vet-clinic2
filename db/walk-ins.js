@@ -79,6 +79,8 @@ export async function createWalkIn(input, { now = new Date() } = {}) {
     const walkInId = randomUUID();
     const startsAt = arrivedAt.toISOString();
     const endsAt = new Date(arrivedAt.getTime() + Number(service.duration_minutes) * 60_000).toISOString();
+    const conflict = (await transactionRows(transaction, 'SELECT id FROM appointments WHERE clinic_id = ? AND vet_id = ? AND status IN (?, ?) AND starts_at < ? AND ends_at > ? LIMIT 1', [profile.id, vet.id, 'pending', 'confirmed', endsAt, startsAt]))[0];
+    if (conflict) throw new WalkInError('The walk-in slot is unavailable. Please ask the clinic team for the next opening.', 409);
     await transaction.execute({
       sql: 'INSERT INTO owners (id, clinic_id, name, mobile, preferred_channel) VALUES (?, ?, ?, ?, ?)',
       args: [ownerId, profile.id, details.ownerName, details.mobile, 'sms']
@@ -91,6 +93,7 @@ export async function createWalkIn(input, { now = new Date() } = {}) {
       sql: 'INSERT INTO appointments (id, clinic_id, vet_id, service_id, owner_id, pet_id, starts_at, ends_at, status, confirmation_token, reschedule_token, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       args: [appointmentId, profile.id, vet.id, service.id, ownerId, petId, startsAt, endsAt, 'confirmed', randomUUID(), randomUUID(), details.reason]
     });
+    await transaction.execute({ sql: 'INSERT INTO slot_reservations (id, appointment_id, vet_id, starts_at, capacity_index) VALUES (?, ?, ?, ?, ?)', args: [randomUUID(), appointmentId, vet.id, startsAt, 0] });
     await transaction.execute({
       sql: 'INSERT INTO walk_ins (id, clinic_id, appointment_id, reason, arrived_at) VALUES (?, ?, ?, ?, ?)',
       args: [walkInId, profile.id, appointmentId, details.reason, startsAt]

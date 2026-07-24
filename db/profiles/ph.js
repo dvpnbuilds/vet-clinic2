@@ -197,7 +197,7 @@ export default {
     print: 'I-print ang QR'
   },
   petCard: {
-    tokenDays: 365,
+    tokenDays: 30,
     kicker: 'Pet passport',
     title: 'Health card ni {pet}',
     profile: 'Profile',

@@ -2,5 +2,8 @@ export {
   completeAppointmentRoute,
   previewReviewRoute,
   submitReviewFeedbackRoute,
-  submitReviewRatingRoute
+  submitReviewRatingRoute,
+  reviewReconciliationRoute,
+  retryReviewRoute,
+  revokeReviewRoute
 } from '../db/reviews.js';
