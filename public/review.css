@@ -1,0 +1,15 @@
+.review-shell { display: grid; min-height: 100vh; place-items: center; padding: clamp(1rem, 4vw, 3rem); }
+.review-card { width: min(100%, 42rem); padding: clamp(1.5rem, 6vw, 4rem); border: 1px solid var(--line); border-radius: 1.5rem; background: var(--surface); box-shadow: 0 1rem 3rem #22433616; }
+.review-card h1 { max-width: 11ch; margin-bottom: .9rem; font-size: clamp(3rem, 10vw, 5.5rem); line-height: .86; }
+.review-card h2 { margin: 2rem 0 1rem; font-size: clamp(1.7rem, 5vw, 2.7rem); line-height: .94; }
+.review-card > p:not(.wordmark):not(.eyebrow), .review-card section > p:not(.success-mark) { max-width: 46ch; color: var(--ink-soft); line-height: 1.55; }
+.rating-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: .6rem; }
+.rating-scale button { min-height: 3.5rem; border: 1px solid var(--line); border-radius: .75rem; background: #fff; color: var(--leaf-dark); font-size: 1.35rem; font-weight: 800; }
+.rating-scale button:hover { border-color: var(--leaf); background: var(--lime); }
+#feedback-form { margin-top: 1.5rem; }
+#feedback-form label { margin-bottom: .2rem; }
+#feedback-form textarea { width: 100%; margin-top: .45rem; padding: .75rem; border: 1px solid #aebbb1; border-radius: .65rem; color: var(--ink); font: inherit; resize: vertical; }
+#feedback-form textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.review-card .success-mark { display: grid; place-items: center; width: 3.4rem; height: 3.4rem; margin-top: 2rem; border-radius: 50%; background: var(--lime); color: var(--leaf-dark); font-size: 1.85rem; font-weight: 900; }
+@media (max-width: 400px) { .rating-scale { gap: .35rem; } .rating-scale button { min-height: 3.1rem; } }
+@media (prefers-reduced-motion: no-preference) { .review-card { animation: enter .35s ease-out both; } }

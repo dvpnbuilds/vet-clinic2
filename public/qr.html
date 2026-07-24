@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title></title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/qr.css">
+  </head>
+  <body>
+    <main class="qr-shell">
+      <section class="qr-card" aria-labelledby="qr-title">
+        <p class="wordmark" id="clinic-wordmark"></p>
+        <p class="eyebrow" id="qr-clinic"></p>
+        <h1 id="qr-title"></h1>
+        <p id="qr-intro"></p>
+        <div id="qr-code" class="qr-code"></div>
+        <p id="qr-url" class="qr-url"></p>
+        <p id="qr-message" class="form-message" role="alert"></p>
+        <button type="button" class="primary-action" id="print-qr"></button>
+      </section>
+    </main>
+    <script type="module" src="/qr.js"></script>
+  </body>
+</html>

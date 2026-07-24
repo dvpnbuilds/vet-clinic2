@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title></title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/walk-in.css">
+  </head>
+  <body>
+    <main class="walk-in-shell">
+      <header class="walk-in-hero">
+        <p class="wordmark" id="clinic-wordmark"></p>
+        <p class="eyebrow" id="walk-in-kicker"></p>
+        <h1 id="walk-in-title"></h1>
+        <p id="walk-in-intro"></p>
+      </header>
+      <section class="walk-in-card" id="walk-in-form-card" aria-labelledby="walk-in-form-title">
+        <h2 id="walk-in-form-title"></h2>
+        <form id="walk-in-form" class="walk-in-form">
+          <label class="field"><span id="owner-label"></span><input name="ownerName" autocomplete="name" required maxlength="120"></label>
+          <label class="field"><span id="mobile-label"></span><input name="mobile" type="tel" autocomplete="tel" inputmode="tel" required maxlength="30"></label>
+          <label class="field"><span id="pet-label"></span><input name="petName" required maxlength="100"></label>
+          <label class="field"><span id="species-label"></span><select name="species" id="species-select" required></select></label>
+          <label class="field"><span id="breed-label"></span><input name="breed" maxlength="100"></label>
+          <label class="field field-wide"><span id="reason-label"></span><textarea name="reason" rows="4" required maxlength="500"></textarea></label>
+          <p class="form-message" id="walk-in-message" role="alert"></p>
+          <button class="primary-action" id="walk-in-submit" type="submit"></button>
+        </form>
+      </section>
+      <section class="walk-in-card is-hidden" id="walk-in-success" aria-labelledby="walk-in-success-title">
+        <p class="success-mark">✓</p>
+        <h2 id="walk-in-success-title"></h2>
+        <p id="walk-in-success-body"></p>
+        <button class="primary-action" id="walk-in-another" type="button"></button>
+      </section>
+    </main>
+    <script type="module" src="/walk-in.js"></script>
+  </body>
+</html>

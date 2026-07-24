@@ -121,6 +121,83 @@ CREATE TABLE IF NOT EXISTS appointments (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS walk_ins (
+  id TEXT PRIMARY KEY,
+  clinic_id TEXT NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  appointment_id TEXT NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  arrived_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  clinic_id TEXT NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  appointment_id TEXT NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  channel TEXT NOT NULL CHECK (channel IN ('sms', 'email')),
+  due_at TEXT NOT NULL,
+  sent_at TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'skipped')),
+  claim_token TEXT,
+  claimed_at TEXT,
+  delivery_started_at TEXT,
+  provider_message_id TEXT,
+  last_error TEXT,
+  rating INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
+  feedback TEXT,
+  rated_at TEXT,
+  feedback_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK ((rating IS NULL AND feedback IS NULL) OR rating IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS pet_card_tokens (
+  id TEXT PRIMARY KEY,
+  clinic_id TEXT NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  pet_id TEXT NOT NULL UNIQUE REFERENCES pets(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id TEXT PRIMARY KEY,
+  clinic_id TEXT NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  appointment_id TEXT NOT NULL UNIQUE REFERENCES appointments(id) ON DELETE CASCADE,
+  receipt_token TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'paid')),
+  total_centavos INTEGER NOT NULL CHECK (total_centavos >= 0),
+  paid_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK ((status = 'paid' AND paid_at IS NOT NULL) OR (status = 'unpaid' AND paid_at IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS invoice_items (
+  id TEXT PRIMARY KEY,
+  invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  service_id TEXT REFERENCES services(id) ON DELETE SET NULL,
+  description TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  unit_price_centavos INTEGER NOT NULL CHECK (unit_price_centavos >= 0),
+  total_centavos INTEGER NOT NULL CHECK (total_centavos >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS booking_idempotency (
+  clinic_id TEXT NOT NULL REFERENCES clinics(id) ON DELETE CASCADE,
+  idempotency_key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  appointment_id TEXT NOT NULL,
+  result_json TEXT,
+  status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'completed')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT,
+  PRIMARY KEY (clinic_id, idempotency_key),
+  CHECK ((status = 'processing' AND result_json IS NULL AND completed_at IS NULL) OR (status = 'completed' AND result_json IS NOT NULL AND completed_at IS NOT NULL))
+);
+
 CREATE TABLE IF NOT EXISTS vaccinations (
   id TEXT PRIMARY KEY,
   pet_id TEXT NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
@@ -180,6 +257,13 @@ CREATE INDEX IF NOT EXISTS idx_vets_clinic_active ON vets (clinic_id, active);
 CREATE INDEX IF NOT EXISTS idx_slots_vet_time ON slots (vet_id, starts_at);
 CREATE INDEX IF NOT EXISTS idx_slot_reservations_vet_time ON slot_reservations (vet_id, starts_at);
 CREATE INDEX IF NOT EXISTS idx_appointments_clinic_time ON appointments (clinic_id, starts_at);
+CREATE INDEX IF NOT EXISTS idx_walk_ins_clinic_arrived ON walk_ins (clinic_id, arrived_at);
+CREATE INDEX IF NOT EXISTS idx_reviews_clinic_due ON reviews (clinic_id, due_at, status);
+CREATE INDEX IF NOT EXISTS idx_reviews_clinic_feedback ON reviews (clinic_id, feedback_at);
+CREATE INDEX IF NOT EXISTS idx_pet_card_tokens_token ON pet_card_tokens (token, expires_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_clinic_status ON invoices (clinic_id, status);
+CREATE INDEX IF NOT EXISTS idx_invoices_receipt_token ON invoices (receipt_token);
+CREATE INDEX IF NOT EXISTS idx_booking_idempotency_appointment ON booking_idempotency (appointment_id);
 CREATE INDEX IF NOT EXISTS idx_reminders_due_unsent ON reminders (due_at, sent_at, status);
 CREATE INDEX IF NOT EXISTS idx_reminder_delivery_attempts_outcome ON reminder_delivery_attempts (outcome, started_at);
 CREATE INDEX IF NOT EXISTS idx_reminder_delivery_attempt_history_reminder ON reminder_delivery_attempt_history (reminder_id, started_at);

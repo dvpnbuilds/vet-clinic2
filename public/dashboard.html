@@ -32,6 +32,7 @@
             <p id="dashboard-intro"></p>
           </div>
           <a href="/" class="desk-link" id="booking-link"></a>
+          <a href="/qr.html" class="desk-link" id="qr-link"></a>
         </header>
         <p id="dashboard-status" class="dashboard-status" role="status"></p>
         <section class="metric-panel" aria-labelledby="recovered-title">
@@ -41,6 +42,33 @@
             <p id="recovered-help"></p>
           </div>
           <span id="recovered-count"></span>
+        </section>
+        <section class="analytics-panel"><div class="analytics-grid"><article class="analytics-card"><p class="eyebrow" id="revenue-title"></p><strong id="revenue-value"></strong></article><article class="analytics-card"><p class="eyebrow" id="outstanding-title"></p><strong id="outstanding-value"></strong></article></div></section>
+        <section class="analytics-panel" aria-labelledby="analytics-title">
+          <div class="panel-heading analytics-heading"><h2 id="analytics-title"></h2><span id="analytics-range"></span></div>
+          <div class="analytics-grid">
+            <article class="analytics-card analytics-trend">
+              <p class="eyebrow" id="no-show-title"></p>
+              <strong id="no-show-rate"></strong>
+              <p id="no-show-summary"></p>
+              <ol id="no-show-trend" class="trend-bars"></ol>
+            </article>
+            <article class="analytics-card">
+              <p class="eyebrow" id="busiest-title"></p>
+              <div class="signal-pair"><span id="busiest-time-label"></span><strong id="busiest-time-value"></strong><small id="busiest-time-count"></small></div>
+              <div class="signal-pair"><span id="busiest-service-label"></span><strong id="busiest-service-value"></strong><small id="busiest-service-count"></small></div>
+            </article>
+            <article class="analytics-card">
+              <p class="eyebrow" id="conversion-title"></p>
+              <strong id="conversion-rate"></strong>
+              <p id="conversion-summary"></p>
+            </article>
+            <article class="analytics-card">
+              <p class="eyebrow" id="campaign-title"></p>
+              <strong id="campaign-rate"></strong>
+              <p id="campaign-summary"></p>
+            </article>
+          </div>
         </section>
         <div class="desk-grid">
           <section class="desk-panel" aria-labelledby="calendar-title">
@@ -54,6 +82,14 @@
           <section class="desk-panel" aria-labelledby="vaccines-title">
             <div class="panel-heading"><h2 id="vaccines-title"></h2></div>
             <ul id="vaccines-list" class="followup-list"></ul>
+          </section>
+          <section class="desk-panel" aria-labelledby="walk-ins-title">
+            <div class="panel-heading"><h2 id="walk-ins-title"></h2></div>
+            <ul id="walk-ins-list" class="followup-list"></ul>
+          </section>
+          <section class="desk-panel" aria-labelledby="feedback-title">
+            <div class="panel-heading"><h2 id="feedback-title"></h2></div>
+            <ul id="feedback-list" class="followup-list"></ul>
           </section>
         </div>
       </section>

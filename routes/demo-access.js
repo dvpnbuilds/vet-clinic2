@@ -84,3 +84,27 @@ export function createStaffAccessMiddleware(options = {}) {
     ...options
   });
 }
+
+export function createPublicWriteRateLimitMiddleware(options = {}) {
+  const windowMs = Number.parseInt(process.env.WALK_IN_RATE_LIMIT_WINDOW_MS || '60000', 10);
+  const maxAttempts = Number.parseInt(process.env.WALK_IN_RATE_LIMIT_MAX || '20', 10);
+  const now = options.now || (() => Date.now());
+  const consumeAttempt = options.consumeAttempt || consumeDemoRateLimit;
+
+  return async function limitPublicWrite(request, response, next) {
+    try {
+      const timestamp = now();
+      const current = await consumeAttempt((options.keyPrefix || 'public-write') + ':' + getClientIp(request), windowMs, timestamp);
+      setResponseHeader(response, 'RateLimit-Limit', String(maxAttempts));
+      setResponseHeader(response, 'RateLimit-Remaining', String(Math.max(maxAttempts - current.count, 0)));
+      if (current.count > maxAttempts) {
+        setResponseHeader(response, 'Retry-After', String(Math.ceil((current.resetAt - timestamp) / 1000)));
+        return response.status(429).json({ error: 'Too many intake requests. Please try again shortly.' });
+      }
+      return next();
+    } catch (error) {
+      console.error('Walk-in rate limit unavailable:', error.message);
+      return response.status(503).json({ error: 'Walk-in intake is temporarily unavailable.' });
+    }
+  };
+}

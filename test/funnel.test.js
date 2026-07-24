@@ -49,7 +49,7 @@ test('public funnel books a live slot and staff calendar receives the appointmen
 
   const bookingResponse = await request('/api/bookings', {
     method: 'POST',
-    headers: { ...headers, 'content-type': 'application/json' },
+    headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': 'funnel-booking-1' },
     body: JSON.stringify({
       slotId: slots[0].id,
       owner: { name: 'Liza Santos', mobile: '+639171234567' },

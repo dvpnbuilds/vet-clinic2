@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import test, { after, before } from 'node:test';
-import { getDb } from '../db/client.js';
+import { getDb, query } from '../db/client.js';
 import {
   SchedulingError,
   bookSlot,
@@ -21,6 +21,7 @@ process.env.ACTIVE_CLINIC_PROFILE = 'ph';
 function bookingInput(slotId, suffix) {
   return {
     slotId,
+    idempotencyKey: 'booking-' + suffix,
     owner: { name: 'Owner ' + suffix, mobile: '+63917000' + suffix.padStart(4, '0') },
     pet: { name: 'Pet ' + suffix, species: 'dog', breed: 'Aspin' }
   };
@@ -119,6 +120,18 @@ test('concurrent requests cannot double-book the same slot', async () => {
 
   const remaining = await listSlots({ date: '2026-07-28', serviceId: 'service-consult' });
   assert.equal(remaining.some((candidate) => candidate.id === slot.id), false);
+});
+
+test('an Idempotency-Key replays the original capacity-two booking exactly once', async () => {
+  await query('UPDATE vet_hours SET capacity = 2');
+  const slot = (await listSlots({ date: '2026-08-06', serviceId: 'service-consult' }))[0];
+  const input = bookingInput(slot.id, '0102');
+  const first = await bookSlot(input);
+  const replay = await bookSlot(input);
+
+  assert.deepEqual(replay, first);
+  assert.equal((await query('SELECT COUNT(*) AS count FROM appointments WHERE slot_id = ?', [slot.id])).rows[0].count, 1);
+  assert.equal((await query('SELECT COUNT(*) AS count FROM booking_idempotency WHERE idempotency_key = ?', [input.idempotencyKey])).rows[0].count, 1);
 });
 
 test('block-offs remove overlapping slots and calendar exposes bookings', async () => {

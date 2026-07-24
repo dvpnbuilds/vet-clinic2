@@ -13,6 +13,7 @@ import {
 } from '../db/reminders.js';
 import { notify } from '../notify/index.js';
 import { localDateTimeToIso } from '../db/scheduling.js';
+import retryHandler from '../api/reminders/[id]/retry.js';
 
 const run = promisify(execFile);
 const databaseFile = '.vetflow-reminders-test.db';
@@ -33,6 +34,7 @@ before(async () => {
   process.env.ACTIVE_CLINIC_PROFILE = 'ph';
   process.env.DRY_RUN = 'true';
   process.env.CRON_SECRET = 'cron-test';
+  process.env.STAFF_PASSCODE = 'staff-test';
   process.env.NODE_ENV = 'test';
   await rm(databaseFile, { force: true });
   await run(process.execPath, ['db/seed.js'], {
@@ -109,6 +111,35 @@ test('an ambiguous post-delivery persistence failure is held and never resent au
   assert.equal(retried.status, 'sent');
   assert.equal((await query('SELECT status FROM reminders WHERE id = ?', [reminderId])).rows[0].status, 'sent');
   assert.equal((await query('SELECT COUNT(*) AS count FROM reminder_delivery_attempt_history WHERE reminder_id = ?', [reminderId])).rows[0].count, 2);
+});
+
+test('the Vercel retry handler reads the dynamic reminder ID from request.query', async () => {
+  const appointment = (await query('SELECT id, clinic_id FROM appointments LIMIT 1')).rows[0];
+  const reminderId = randomUUID();
+  await query(
+    'INSERT INTO reminders (id, clinic_id, appointment_id, type, channel, due_at, status, dedupe_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [reminderId, appointment.clinic_id, appointment.id, 'confirm', 'sms', '2026-07-01T00:00:00.000Z', 'failed', 'vercel-retry-' + reminderId]
+  );
+  await query(
+    'INSERT INTO reminder_delivery_attempts (reminder_id, claim_token, started_at, outcome) VALUES (?, ?, ?, ?)',
+    [reminderId, 'old-claim', '2026-07-01T00:00:00.000Z', 'uncertain']
+  );
+
+  const result = { status: null, body: null };
+  const response = {
+    setHeader() {},
+    status(status) { result.status = status; return this; },
+    json(body) { result.body = body; return this; }
+  };
+  await retryHandler({
+    query: { id: reminderId },
+    params: undefined,
+    headers: { 'x-staff-passcode': 'staff-test' },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, response);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body.reminder, { id: reminderId, status: 'sent' });
 });
 
 test('DRY_RUN never calls a delivery provider', async () => {

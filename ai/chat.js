@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { bookSlot, listSlots } from '../db/scheduling.js';
 import { getActiveClinicProfile } from '../db/profiles/index.js';
 import { chatCompletion } from './openrouter.js';
@@ -41,7 +42,7 @@ async function executeTool(call) {
         slotId: input.slotId,
         owner: { name: input.ownerName, mobile: input.mobile, email: input.email },
         pet: { name: input.petName, species: input.species, breed: input.breed }
-      })
+      }, { idempotencyKey: 'chat:' + (call.id || randomUUID()) })
     };
   }
   return { error: 'Unsupported tool.' };

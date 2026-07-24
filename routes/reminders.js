@@ -79,7 +79,7 @@ export async function reminderReconciliation(request, response) {
 
 export async function retryReminderRoute(request, response) {
   try {
-    return response.status(200).json({ reminder: await retryReminder(request.params?.id) });
+    return response.status(200).json({ reminder: await retryReminder(request.params?.id || request.query?.id) });
   } catch (error) {
     return sendError(response, error);
   }

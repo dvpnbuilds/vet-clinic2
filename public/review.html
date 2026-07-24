@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title></title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/review.css">
+  </head>
+  <body>
+    <main class="review-shell">
+      <section class="review-card" id="review-card" aria-labelledby="review-title">
+        <p class="wordmark" id="clinic-wordmark"></p>
+        <p class="eyebrow" id="review-kicker"></p>
+        <h1 id="review-title"></h1>
+        <p id="review-intro"></p>
+        <section id="rating-step" aria-labelledby="rating-prompt">
+          <h2 id="rating-prompt"></h2>
+          <div class="rating-scale" id="rating-scale"></div>
+          <p class="form-message" id="rating-message" role="alert"></p>
+        </section>
+        <form class="is-hidden" id="feedback-form" aria-labelledby="feedback-title">
+          <h2 id="feedback-title"></h2>
+          <label for="feedback" id="feedback-label"></label>
+          <textarea id="feedback" name="feedback" rows="5" maxlength="1000" required></textarea>
+          <p class="form-message" id="feedback-message" role="alert"></p>
+          <button class="primary-action" id="feedback-action" type="submit"></button>
+        </form>
+        <section class="is-hidden" id="thanks-step" aria-labelledby="thanks-title">
+          <p class="success-mark">✓</p>
+          <h2 id="thanks-title"></h2>
+          <p id="thanks-body"></p>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/review.js"></script>
+  </body>
+</html>

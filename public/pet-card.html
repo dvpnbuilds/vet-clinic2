@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f1e9">
+    <title></title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/pet-card.css">
+  </head>
+  <body>
+    <main class="passport-shell" id="passport-shell">
+      <section class="passport-card" aria-labelledby="pet-card-title">
+        <header class="passport-header">
+          <p class="wordmark" id="clinic-wordmark"></p>
+          <p class="eyebrow" id="pet-card-kicker"></p>
+          <h1 id="pet-card-title"></h1>
+          <dl class="pet-profile" aria-labelledby="profile-title">
+            <div><dt id="profile-title"></dt><dd id="pet-name"></dd></div>
+            <div><dt id="species-label"></dt><dd id="pet-species"></dd></div>
+            <div><dt id="breed-label"></dt><dd id="pet-breed"></dd></div>
+          </dl>
+        </header>
+        <section class="due-panel" aria-labelledby="next-due-title">
+          <p class="eyebrow" id="next-due-title"></p>
+          <strong id="next-due-name"></strong>
+          <time id="next-due-date"></time>
+        </section>
+        <section class="passport-section" aria-labelledby="vaccines-title">
+          <h2 id="vaccines-title"></h2>
+          <ol class="passport-list" id="vaccines-list"></ol>
+        </section>
+        <section class="passport-section" aria-labelledby="visits-title">
+          <h2 id="visits-title"></h2>
+          <ol class="passport-list" id="visits-list"></ol>
+        </section>
+        <p class="passport-error is-hidden" id="passport-error" role="alert"></p>
+      </section>
+    </main>
+    <script type="module" src="/pet-card.js"></script>
+  </body>
+</html>

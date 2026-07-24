@@ -3,6 +3,7 @@ import { getDb, query } from './client.js';
 import { getActiveClinicProfile } from './profiles/index.js';
 import { localDateTimeToIso } from './scheduling.js';
 import { notify } from '../notify/index.js';
+import { processReviewRequests } from './reviews.js';
 
 const APPOINTMENT_STATUSES = ['pending', 'confirmed'];
 const CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
@@ -316,7 +317,11 @@ export async function processReminderCron({ now = new Date(), sendNotification =
       failed.push({ id: item.id, error: error.message });
     }
   }
-  return { delivered, failed };
+  const reviewRequests = await processReviewRequests({ now, sendNotification });
+  return {
+    delivered: delivered.concat(reviewRequests.delivered),
+    failed: failed.concat(reviewRequests.failed)
+  };
 }
 
 export async function listUnconfirmedAppointments() {

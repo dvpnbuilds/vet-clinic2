@@ -1,4 +1,4 @@
-const state = { profile: null, accessCode: '', service: null, slot: null };
+const state = { profile: null, accessCode: '', service: null, slot: null, bookingKey: null };
 
 const el = (id) => document.getElementById(id);
 const accessCard = el('access-card');
@@ -171,6 +171,7 @@ async function loadSlots() {
 
 function chooseSlot(slot) {
   state.slot = slot;
+  state.bookingKey = null;
   el('chosen-slot').textContent = state.service.name + ' · ' + dateTime(slot.startsAt) + ' · ' + slot.vetName;
   setVisible('details-section', true);
   document.querySelectorAll('.slot-button').forEach((button) => {
@@ -224,8 +225,10 @@ el('booking-form').addEventListener('submit', async (event) => {
   button.textContent = copy.booking;
   setMessage('booking-message');
   try {
+    state.bookingKey ||= crypto.randomUUID();
     const { appointment } = await api('/api/bookings', {
       method: 'POST',
+      headers: { 'idempotency-key': state.bookingKey },
       body: JSON.stringify({
         slotId: state.slot.id,
         owner: { name: form.get('ownerName'), mobile: form.get('mobile'), email: form.get('email') },
@@ -249,12 +252,17 @@ el('booking-form').addEventListener('submit', async (event) => {
 el('another-action').addEventListener('click', () => {
   state.service = null;
   state.slot = null;
+  state.bookingKey = null;
   el('booking-form').reset();
   setVisible('thank-you', false);
   setVisible('availability-section', true);
   el('availability-section').classList.add('is-muted');
   renderServices();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+el('booking-form').addEventListener('input', () => {
+  state.bookingKey = null;
 });
 
 const rememberedCode = sessionStorage.getItem('vetflow-demo-code');

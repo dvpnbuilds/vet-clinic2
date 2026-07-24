@@ -5,6 +5,7 @@ import {
   listCalendar,
   listSlots
 } from '../db/scheduling.js';
+import { requestHeader } from './http.js';
 
 function sendError(response, error) {
   if (error instanceof SchedulingError) {
@@ -25,7 +26,7 @@ export async function slots(request, response) {
 
 export async function booking(request, response) {
   try {
-    const appointment = await bookSlot(request.body);
+    const appointment = await bookSlot(request.body, { idempotencyKey: requestHeader(request, 'idempotency-key') });
     return response.status(201).json({ appointment });
   } catch (error) {
     return sendError(response, error);

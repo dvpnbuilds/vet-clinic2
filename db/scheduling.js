@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { getDb, query } from './client.js';
 import { getActiveClinicProfile } from './profiles/index.js';
 
@@ -6,6 +6,7 @@ const SLICE_MINUTES = 10;
 const ACTIVE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'completed'];
 const PET_SPECIES = new Set(['dog', 'cat', 'other']);
 const timeZoneOffsetsByDate = new Map();
+let localBookingWriteTail = Promise.resolve();
 
 export class SchedulingError extends Error {
   constructor(message, status = 400) {
@@ -338,13 +339,95 @@ function appointmentResult(appointment) {
   };
 }
 
-export async function bookSlot(input, { now = new Date() } = {}) {
-  input = validateBookingInput(input);
-  const nowTimestamp = asTimestamp(now, 'Current time');
-  const profile = getActiveClinicProfile();
-  const appointmentId = randomUUID();
-  let transaction;
+function idempotencyFingerprint(input) {
+  return createHash('sha256').update(JSON.stringify(input)).digest('hex');
+}
+
+function idempotencyKey(value) {
+  return requiredString(value, 'Idempotency-Key', 255);
+}
+
+function waitForWriteRetry(attempt) {
+  return new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+}
+
+function storedAppointment(row) {
   try {
+    const appointment = JSON.parse(row.result_json);
+    if (!appointment || typeof appointment.id !== 'string') throw new Error('missing booking result');
+    return appointment;
+  } catch {
+    throw new SchedulingError('The previous booking result is unavailable. Please contact the clinic.', 500);
+  }
+}
+
+async function completeIdempotencyRecord(clinicId, key, appointmentId, result) {
+  await query(
+    'UPDATE booking_idempotency SET result_json = ?, status = ?, completed_at = CURRENT_TIMESTAMP WHERE clinic_id = ? AND idempotency_key = ? AND appointment_id = ?',
+    [JSON.stringify(result), 'completed', clinicId, key, appointmentId]
+  );
+}
+
+async function existingIdempotentBooking(clinicId, key, fingerprint) {
+  const row = asRows(await query(
+    'SELECT fingerprint, appointment_id, result_json FROM booking_idempotency WHERE clinic_id = ? AND idempotency_key = ?',
+    [clinicId, key]
+  ))[0];
+  if (!row) return null;
+  if (row.fingerprint !== fingerprint) {
+    throw new SchedulingError('This Idempotency-Key was already used for a different booking.', 409);
+  }
+  if (row.result_json) return storedAppointment(row);
+
+  const appointment = asRows(await query(
+    'SELECT id, slot_id, service_id, vet_id, starts_at, ends_at, status FROM appointments WHERE id = ? AND clinic_id = ?',
+    [row.appointment_id, clinicId]
+  ))[0];
+  if (appointment) {
+    const result = appointmentResult(appointment);
+    await completeIdempotencyRecord(clinicId, key, appointment.id, result);
+    return result;
+  }
+  throw new SchedulingError('This booking is already being processed. Please retry shortly.', 409);
+}
+
+export async function bookSlot(input, options = {}) {
+  // The embedded SQLite driver rejects overlapping write transactions after an
+  // idempotency claim. Turso coordinates these writes server-side; this only
+  // serializes local file-DB development and test calls.
+  if ((process.env.TURSO_DATABASE_URL || '').startsWith('file:') && !options.localWriteSerialized) {
+    let release;
+    const previous = localBookingWriteTail;
+    const current = new Promise((resolve) => { release = resolve; });
+    localBookingWriteTail = previous.then(() => current);
+    await previous;
+    try {
+      return await bookSlot(input, { ...options, localWriteSerialized: true });
+    } finally {
+      release();
+    }
+  }
+  const requestedIdempotencyKey = Object.hasOwn(options, 'idempotencyKey') ? options.idempotencyKey : input?.idempotencyKey;
+  input = validateBookingInput(input);
+  const nowTimestamp = asTimestamp(options.now || new Date(), 'Current time');
+  const profile = getActiveClinicProfile();
+  const key = idempotencyKey(requestedIdempotencyKey);
+  const fingerprint = idempotencyFingerprint(input);
+  const appointmentId = randomUUID();
+  const busyRetries = Number(options.busyRetries || 0);
+  let transaction;
+  let committed = false;
+  try {
+    const replay = await existingIdempotentBooking(profile.id, key, fingerprint);
+    if (replay) return replay;
+    const claimed = await query(
+      'INSERT OR IGNORE INTO booking_idempotency (clinic_id, idempotency_key, fingerprint, appointment_id) VALUES (?, ?, ?, ?)',
+      [profile.id, key, fingerprint, appointmentId]
+    );
+    if (claimed.rowsAffected === 0) {
+      const retry = await existingIdempotentBooking(profile.id, key, fingerprint);
+      if (retry) return retry;
+    }
     transaction = await getDb().transaction('write');
     const slot = (await transactionRows(
       transaction,
@@ -414,13 +497,27 @@ export async function bookSlot(input, { now = new Date() } = {}) {
         args: ['unavailable', slot.id]
       });
     }
+    const result = appointmentResult({ id: appointmentId, slot_id: slot.id, service_id: slot.service_id, vet_id: slot.vet_id, starts_at: slot.starts_at, ends_at: slot.ends_at, status: 'pending' });
     await transaction.commit();
+    committed = true;
     transaction.close();
     transaction = null;
-    return appointmentResult({ id: appointmentId, slot_id: slot.id, service_id: slot.service_id, vet_id: slot.vet_id, starts_at: slot.starts_at, ends_at: slot.ends_at, status: 'pending' });
+    await completeIdempotencyRecord(profile.id, key, appointmentId, result);
+    return result;
   } catch (error) {
     if (transaction && !transaction.closed) {
       await transaction.rollback();
+    }
+    if (!committed) {
+      await query(
+        'DELETE FROM booking_idempotency WHERE clinic_id = ? AND idempotency_key = ? AND appointment_id = ? AND status = ?',
+        [profile.id, key, appointmentId, 'processing']
+      ).catch(() => {});
+    }
+    const busy = String(error.message).includes('database is locked') || String(error.message).includes('SQLITE_BUSY');
+    if (busy && busyRetries < 3) {
+      await waitForWriteRetry(busyRetries);
+      return bookSlot(input, { now: options.now, idempotencyKey: key, busyRetries: busyRetries + 1 });
     }
     if (error instanceof SchedulingError) {
       throw error;
@@ -489,7 +586,7 @@ export async function listCalendar(input) {
   const startsAt = firstInstantOfLocalDate(date, profile.timezone);
   const endsAt = firstInstantOfLocalDate(addLocalDays(date, view === 'week' ? 7 : 1), profile.timezone);
   const appointments = asRows(await query(
-    'SELECT a.id, a.starts_at, a.ends_at, a.status, s.name AS service_name, v.name AS vet_name, p.name AS pet_name, o.name AS owner_name FROM appointments a JOIN services s ON s.id = a.service_id JOIN vets v ON v.id = a.vet_id JOIN pets p ON p.id = a.pet_id JOIN owners o ON o.id = a.owner_id WHERE a.clinic_id = ? AND a.starts_at >= ? AND a.starts_at < ? AND a.status IN (?, ?, ?) ORDER BY a.starts_at',
+    'SELECT a.id, a.starts_at, a.ends_at, a.status, s.name AS service_name, v.name AS vet_name, p.id AS pet_id, p.name AS pet_name, o.name AS owner_name FROM appointments a JOIN services s ON s.id = a.service_id JOIN vets v ON v.id = a.vet_id JOIN pets p ON p.id = a.pet_id JOIN owners o ON o.id = a.owner_id WHERE a.clinic_id = ? AND a.starts_at >= ? AND a.starts_at < ? AND a.status IN (?, ?, ?) ORDER BY a.starts_at',
     [profile.id, startsAt, endsAt, ...ACTIVE_APPOINTMENT_STATUSES]
   ));
   const blockOffs = asRows(await query(
